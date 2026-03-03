@@ -36,12 +36,13 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "create-a-modern-mobi",
+    "scheme": "createamodernmobi",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "backendUrl": "https://ejc7w5dc44x2t7vwbcmdvj8hnuge43dg.app.specular.dev"
     }
   }
 }
