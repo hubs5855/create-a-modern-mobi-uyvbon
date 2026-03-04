@@ -9,7 +9,108 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          id: string
+          user_id: string | null
+          full_name: string | null
+          phone_number: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          full_name?: string | null
+          phone_number?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          full_name?: string | null
+          phone_number?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+      }
+      tracking_sessions: {
+        Row: {
+          id: string
+          created_at: string | null
+          user_id: string | null
+          status: string | null
+          mode: string | null
+          tracking_code: string | null
+          expiry_time: string | null
+          order_id: string | null
+          customer_name: string | null
+          delivery_address: string | null
+          delivery_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string | null
+          user_id?: string | null
+          status?: string | null
+          mode?: string | null
+          tracking_code?: string | null
+          expiry_time?: string | null
+          order_id?: string | null
+          customer_name?: string | null
+          delivery_address?: string | null
+          delivery_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string | null
+          user_id?: string | null
+          status?: string | null
+          mode?: string | null
+          tracking_code?: string | null
+          expiry_time?: string | null
+          order_id?: string | null
+          customer_name?: string | null
+          delivery_address?: string | null
+          delivery_status?: string | null
+          updated_at?: string | null
+        }
+      }
+      locations: {
+        Row: {
+          id: string
+          session_id: string | null
+          latitude: number
+          longitude: number
+          speed: number | null
+          battery_level: number | null
+          timestamp: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          session_id?: string | null
+          latitude: number
+          longitude: number
+          speed?: number | null
+          battery_level?: number | null
+          timestamp?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          session_id?: string | null
+          latitude?: number
+          longitude?: number
+          speed?: number | null
+          battery_level?: number | null
+          timestamp?: string | null
+          created_at?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never

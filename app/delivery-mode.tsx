@@ -15,8 +15,10 @@ import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { supabase } from '@/app/integrations/supabase/client';
 
 type DeliveryStatus = 'pending' | 'on_the_way' | 'delivered';
 
@@ -34,6 +36,15 @@ export default function DeliveryModeScreen() {
 
   console.log('DeliveryModeScreen: Rendering');
 
+  const generateTrackingCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = 'DEL';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
   const startDelivery = async () => {
     console.log('User tapped Start Delivery button');
     setLoading(true);
@@ -47,20 +58,69 @@ export default function DeliveryModeScreen() {
         return;
       }
 
-      // TODO: Backend Integration - POST /api/tracking/delivery/start with { customerName?, deliveryAddress? } → { sessionId, orderId, trackingCode, trackingUrl }
-      const mockSessionId = 'delivery-' + Date.now();
-      const mockOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
-      const mockTrackingCode = 'DEL' + Math.floor(Math.random() * 1000);
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
 
-      setSessionId(mockSessionId);
-      setOrderId(mockOrderId);
-      setTrackingCode(mockTrackingCode);
+      // Generate unique tracking code and order ID
+      const newTrackingCode = generateTrackingCode();
+      const newOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
+
+      console.log('Creating delivery session in Supabase');
+
+      // Create tracking session in Supabase
+      const { data: session, error: sessionError } = await supabase
+        .from('tracking_sessions')
+        .insert({
+          mode: 'delivery',
+          status: 'active',
+          tracking_code: newTrackingCode,
+          order_id: newOrderId,
+          customer_name: customerName || null,
+          delivery_address: deliveryAddress || null,
+          delivery_status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (sessionError) {
+        console.error('Error creating session:', sessionError);
+        alert('Failed to start delivery tracking');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Session created:', session);
+
+      // Insert initial location
+      const batteryLevel = await Battery.getBatteryLevelAsync();
+      const batteryPercentage = Math.round(batteryLevel * 100);
+
+      const { error: locationError } = await supabase
+        .from('locations')
+        .insert({
+          session_id: session.id,
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: location.coords.speed ? location.coords.speed * 3.6 : null,
+          battery_level: batteryPercentage,
+          timestamp: new Date().toISOString(),
+        });
+
+      if (locationError) {
+        console.error('Error inserting initial location:', locationError);
+      }
+
+      setSessionId(session.id);
+      setOrderId(newOrderId);
+      setTrackingCode(newTrackingCode);
       setIsTracking(true);
       setDeliveryStatus('pending');
 
-      console.log('Delivery started:', { sessionId: mockSessionId, orderId: mockOrderId, trackingCode: mockTrackingCode });
+      console.log('Delivery started:', { sessionId: session.id, orderId: newOrderId, trackingCode: newTrackingCode });
 
-      startLocationUpdates(mockSessionId);
+      startLocationUpdates(session.id);
     } catch (error) {
       console.error('Error starting delivery:', error);
       alert('Failed to start delivery tracking');
@@ -79,41 +139,105 @@ export default function DeliveryModeScreen() {
         });
 
         const speedKmh = location.coords.speed ? location.coords.speed * 3.6 : 0;
+        const batteryLevel = await Battery.getBatteryLevelAsync();
+        const batteryPercentage = Math.round(batteryLevel * 100);
 
         console.log('Location update:', {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
           speed: speedKmh,
+          battery: batteryPercentage,
         });
 
-        // TODO: Backend Integration - POST /api/tracking/:sessionId/location with { latitude, longitude, speed } → { success, timestamp }
+        // Insert location update into Supabase
+        const { error } = await supabase
+          .from('locations')
+          .insert({
+            session_id: sessionId,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            speed: speedKmh,
+            battery_level: batteryPercentage,
+            timestamp: new Date().toISOString(),
+          });
+
+        if (error) {
+          console.error('Error updating location:', error);
+        }
       } catch (error) {
         console.error('Error updating location:', error);
       }
     }, 5000);
   };
 
-  const updateDeliveryStatus = (newStatus: DeliveryStatus) => {
+  const updateDeliveryStatus = async (newStatus: DeliveryStatus) => {
+    if (!sessionId) return;
+
     console.log('User updated delivery status to:', newStatus);
     setDeliveryStatus(newStatus);
 
-    // TODO: Backend Integration - PUT /api/tracking/delivery/:sessionId/status with { status } → { success, status, deliveredAt? }
+    try {
+      // Update delivery status in Supabase
+      const { error } = await supabase
+        .from('tracking_sessions')
+        .update({
+          delivery_status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId);
 
-    if (newStatus === 'delivered') {
-      if (locationInterval.current) {
-        clearInterval(locationInterval.current);
-        locationInterval.current = null;
+      if (error) {
+        console.error('Error updating delivery status:', error);
+      } else {
+        console.log('Delivery status updated successfully');
       }
-      console.log('Delivery completed, tracking stopped');
+
+      // If delivered, stop tracking
+      if (newStatus === 'delivered') {
+        if (locationInterval.current) {
+          clearInterval(locationInterval.current);
+          locationInterval.current = null;
+        }
+
+        // Update session status to completed
+        await supabase
+          .from('tracking_sessions')
+          .update({
+            status: 'completed',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+
+        console.log('Delivery completed, tracking stopped');
+      }
+    } catch (error) {
+      console.error('Error updating delivery status:', error);
     }
   };
 
-  const stopDelivery = () => {
+  const stopDelivery = async () => {
     console.log('User tapped Stop Delivery button');
     
     if (locationInterval.current) {
       clearInterval(locationInterval.current);
       locationInterval.current = null;
+    }
+
+    // Update session status to stopped
+    if (sessionId) {
+      try {
+        await supabase
+          .from('tracking_sessions')
+          .update({
+            status: 'stopped',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+        
+        console.log('Session marked as stopped in database');
+      } catch (error) {
+        console.error('Error stopping session:', error);
+      }
     }
 
     setIsTracking(false);

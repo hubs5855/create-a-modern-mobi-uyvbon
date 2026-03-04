@@ -1,5 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import { Map } from '@/components/Map';
+import { colors, commonStyles } from '@/styles/commonStyles';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import {
   View,
   Text,
@@ -9,11 +12,9 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
-import { Map } from '@/components/Map';
+import { supabase } from '@/app/integrations/supabase/client';
 
 interface TrackingData {
   sessionType: string;
@@ -43,38 +44,84 @@ export default function PublicTrackingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  console.log('PublicTrackingScreen: Viewing tracking code:', code);
+  console.log('PublicTrackingScreen: Tracking code:', code);
 
-  const fetchTrackingData = async () => {
+  useEffect(() => {
+    fetchTrackingData();
+    
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(() => {
+      fetchTrackingData(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [code]);
+
+  const fetchTrackingData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
+    setError(null);
+
     try {
-      setError(null);
-      // TODO: Backend Integration - GET /api/tracking/public/:trackingCode → { sessionType, status, expiresAt?, orderId?, customerName?, deliveryStatus?, lastLocation?, locationHistory }
-      
-      // Mock data for now
-      const mockData: TrackingData = {
-        sessionType: 'personal',
-        status: 'active',
-        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-        lastLocation: {
-          latitude: 6.9271,
-          longitude: 79.8612,
-          speed: 45,
-          batteryLevel: 78,
-          timestamp: new Date().toISOString(),
-        },
-        locationHistory: [
-          {
-            latitude: 6.9271,
-            longitude: 79.8612,
-            timestamp: new Date().toISOString(),
-          },
-        ],
+      console.log('Fetching tracking data for code:', code);
+
+      // Fetch session data
+      const { data: session, error: sessionError } = await supabase
+        .from('tracking_sessions')
+        .select('*')
+        .eq('tracking_code', code)
+        .single();
+
+      if (sessionError || !session) {
+        console.error('Session not found:', sessionError);
+        setError('Tracking session not found');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Session found:', session);
+
+      // Fetch location history
+      const { data: locations, error: locationsError } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('session_id', session.id)
+        .order('timestamp', { ascending: false })
+        .limit(50);
+
+      if (locationsError) {
+        console.error('Error fetching locations:', locationsError);
+      }
+
+      const locationHistory = locations || [];
+      const lastLocation = locationHistory[0];
+
+      const data: TrackingData = {
+        sessionType: session.mode || 'unknown',
+        status: session.status || 'unknown',
+        expiresAt: session.expiry_time || undefined,
+        orderId: session.order_id || undefined,
+        customerName: session.customer_name || undefined,
+        deliveryStatus: session.delivery_status || undefined,
+        lastLocation: lastLocation ? {
+          latitude: lastLocation.latitude,
+          longitude: lastLocation.longitude,
+          speed: lastLocation.speed || undefined,
+          batteryLevel: lastLocation.battery_level || undefined,
+          timestamp: lastLocation.timestamp || lastLocation.created_at || '',
+        } : undefined,
+        locationHistory: locationHistory.map(loc => ({
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          timestamp: loc.timestamp || loc.created_at || '',
+        })),
       };
 
-      setTrackingData(mockData);
-      console.log('Tracking data loaded:', mockData);
-    } catch (err) {
-      console.error('Error fetching tracking data:', err);
+      console.log('Tracking data loaded:', data);
+      setTrackingData(data);
+    } catch (error) {
+      console.error('Error fetching tracking data:', error);
       setError('Failed to load tracking data');
     } finally {
       setLoading(false);
@@ -82,36 +129,40 @@ export default function PublicTrackingScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchTrackingData();
-
-    // Auto-refresh every 5 seconds
-    const interval = setInterval(() => {
-      fetchTrackingData();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [code]);
-
   const onRefresh = () => {
+    console.log('User pulled to refresh');
     setRefreshing(true);
     fetchTrackingData();
   };
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString();
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+
+    if (diffSecs < 60) {
+      return `${diffSecs} seconds ago`;
+    } else if (diffMins < 60) {
+      return `${diffMins} minutes ago`;
+    } else {
+      return date.toLocaleTimeString();
+    }
   };
 
   const getTimeRemaining = (expiresAt: string) => {
-    const now = Date.now();
-    const expiry = new Date(expiresAt).getTime();
-    const diff = expiry - now;
-    
-    if (diff <= 0) return 'Expired';
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const now = new Date();
+    const expiry = new Date(expiresAt);
+    const diffMs = expiry.getTime() - now.getTime();
+
+    if (diffMs <= 0) {
+      return 'Expired';
+    }
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
     return `${hours}h ${minutes}m`;
   };
 
@@ -120,8 +171,9 @@ export default function PublicTrackingScreen() {
       case 'active':
         return colors.success;
       case 'stopped':
+      case 'completed':
         return colors.textSecondary;
-      case 'expired':
+      case 'sos_triggered':
         return colors.danger;
       case 'pending':
         return colors.warning;
@@ -135,43 +187,37 @@ export default function PublicTrackingScreen() {
   };
 
   const statusColor = trackingData ? getStatusColor(trackingData.status) : colors.textSecondary;
-  const timeRemaining = trackingData?.expiresAt ? getTimeRemaining(trackingData.expiresAt) : null;
-  const lastUpdateTime = trackingData?.lastLocation?.timestamp 
-    ? formatTimestamp(trackingData.lastLocation.timestamp) 
+  const lastUpdateText = trackingData?.lastLocation?.timestamp 
+    ? formatTimestamp(trackingData.lastLocation.timestamp)
+    : 'No updates yet';
+  const timeRemainingText = trackingData?.expiresAt 
+    ? getTimeRemaining(trackingData.expiresAt)
+    : null;
+  const speedText = trackingData?.lastLocation?.speed 
+    ? `${trackingData.lastLocation.speed.toFixed(1)} km/h`
+    : 'N/A';
+  const batteryText = trackingData?.lastLocation?.batteryLevel 
+    ? `${trackingData.lastLocation.batteryLevel}%`
     : 'N/A';
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
-        <Stack.Screen
-          options={{
-            headerShown: true,
-            title: 'Live Tracking',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerShadowVisible: false,
-          }}
-        />
+  return (
+    <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: 'Live Tracking',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
+        }}
+      />
+      
+      {loading && !trackingData ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading tracking data...</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error || !trackingData) {
-    return (
-      <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
-        <Stack.Screen
-          options={{
-            headerShown: true,
-            title: 'Live Tracking',
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerShadowVisible: false,
-          }}
-        />
+      ) : error ? (
         <View style={styles.errorContainer}>
           <IconSymbol
             ios_icon_name="exclamationmark.triangle.fill"
@@ -179,175 +225,174 @@ export default function PublicTrackingScreen() {
             size={48}
             color={colors.danger}
           />
-          <Text style={styles.errorTitle}>Tracking Not Found</Text>
-          <Text style={styles.errorText}>
-            {error || 'This tracking code is invalid or has expired.'}
-          </Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorSubtext}>Please check the tracking code and try again</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
-
-  const isPersonalSafety = trackingData.sessionType === 'personal';
-  const isDelivery = trackingData.sessionType === 'delivery';
-
-  return (
-    <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: isPersonalSafety ? 'Personal Safety Tracking' : 'Delivery Tracking',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerShadowVisible: false,
-        }}
-      />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
-        {/* Map */}
-        {trackingData.lastLocation && (
-          <View style={styles.mapContainer}>
-            <Map
-              initialRegion={{
-                latitude: trackingData.lastLocation.latitude,
-                longitude: trackingData.lastLocation.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              markers={[
-                {
+      ) : trackingData ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          }
+        >
+          {/* Map */}
+          {trackingData.lastLocation && (
+            <View style={styles.mapContainer}>
+              <Map
+                markers={[
+                  {
+                    id: '1',
+                    latitude: trackingData.lastLocation.latitude,
+                    longitude: trackingData.lastLocation.longitude,
+                    title: 'Current Location',
+                  },
+                ]}
+                initialRegion={{
                   latitude: trackingData.lastLocation.latitude,
                   longitude: trackingData.lastLocation.longitude,
-                  title: isPersonalSafety ? 'Current Location' : 'Delivery Location',
-                },
-              ]}
-              style={styles.map}
-            />
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                style={styles.map}
+              />
+            </View>
+          )}
+
+          {/* Status Card */}
+          <View style={styles.statusCard}>
+            <View style={styles.statusHeader}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={styles.statusText}>{trackingData.status.toUpperCase()}</Text>
+            </View>
+            <Text style={styles.lastUpdateText}>Last updated: {lastUpdateText}</Text>
           </View>
-        )}
 
-        {/* Status Card */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={styles.statusText}>{trackingData.status.toUpperCase()}</Text>
-          </View>
-          
-          {isDelivery && trackingData.orderId && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Order ID</Text>
-              <Text style={styles.infoValue}>{trackingData.orderId}</Text>
-            </View>
-          )}
-
-          {isDelivery && trackingData.customerName && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Customer</Text>
-              <Text style={styles.infoValue}>{trackingData.customerName}</Text>
-            </View>
-          )}
-
-          {isDelivery && trackingData.deliveryStatus && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Delivery Status</Text>
-              <Text style={styles.infoValue}>{trackingData.deliveryStatus}</Text>
-            </View>
-          )}
-
-          {isPersonalSafety && timeRemaining && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Time Remaining</Text>
-              <Text style={styles.infoValue}>{timeRemaining}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Location Info */}
-        {trackingData.lastLocation && (
-          <View style={styles.locationCard}>
-            <Text style={styles.cardTitle}>Current Location</Text>
+          {/* Session Info */}
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Session Information</Text>
             
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
+            <View style={styles.infoRow}>
+              <IconSymbol
+                ios_icon_name="location.fill"
+                android_material_icon_name="location-on"
+                size={20}
+                color={colors.accent}
+              />
+              <Text style={styles.infoLabel}>Type</Text>
+              <Text style={styles.infoValue}>
+                {trackingData.sessionType === 'personal_safety' ? 'Personal Safety' : 'Delivery'}
+              </Text>
+            </View>
+
+            {trackingData.orderId && (
+              <View style={styles.infoRow}>
                 <IconSymbol
-                  ios_icon_name="location.fill"
-                  android_material_icon_name="location-on"
+                  ios_icon_name="number"
+                  android_material_icon_name="tag"
                   size={20}
-                  color={colors.primary}
+                  color={colors.accent}
                 />
-                <Text style={styles.statLabel}>Coordinates</Text>
-                <Text style={styles.statValue}>
-                  {trackingData.lastLocation.latitude.toFixed(4)}, {trackingData.lastLocation.longitude.toFixed(4)}
-                </Text>
+                <Text style={styles.infoLabel}>Order ID</Text>
+                <Text style={styles.infoValue}>{trackingData.orderId}</Text>
               </View>
+            )}
 
-              {trackingData.lastLocation.speed !== undefined && (
-                <View style={styles.statItem}>
-                  <IconSymbol
-                    ios_icon_name="speedometer"
-                    android_material_icon_name="speed"
-                    size={20}
-                    color={colors.accent}
-                  />
-                  <Text style={styles.statLabel}>Speed</Text>
-                  <Text style={styles.statValue}>{trackingData.lastLocation.speed.toFixed(0)} km/h</Text>
-                </View>
-              )}
+            {trackingData.customerName && (
+              <View style={styles.infoRow}>
+                <IconSymbol
+                  ios_icon_name="person.fill"
+                  android_material_icon_name="person"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.infoLabel}>Customer</Text>
+                <Text style={styles.infoValue}>{trackingData.customerName}</Text>
+              </View>
+            )}
 
-              {trackingData.lastLocation.batteryLevel !== undefined && (
-                <View style={styles.statItem}>
-                  <IconSymbol
-                    ios_icon_name="battery.100"
-                    android_material_icon_name="battery-full"
-                    size={20}
-                    color={colors.success}
-                  />
-                  <Text style={styles.statLabel}>Battery</Text>
-                  <Text style={styles.statValue}>{trackingData.lastLocation.batteryLevel}%</Text>
-                </View>
-              )}
+            {trackingData.deliveryStatus && (
+              <View style={styles.infoRow}>
+                <IconSymbol
+                  ios_icon_name="shippingbox.fill"
+                  android_material_icon_name="local-shipping"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.infoLabel}>Delivery Status</Text>
+                <Text style={styles.infoValue}>{trackingData.deliveryStatus}</Text>
+              </View>
+            )}
 
-              <View style={styles.statItem}>
+            {timeRemainingText && (
+              <View style={styles.infoRow}>
                 <IconSymbol
                   ios_icon_name="clock.fill"
                   android_material_icon_name="schedule"
                   size={20}
-                  color={colors.textSecondary}
+                  color={colors.accent}
                 />
-                <Text style={styles.statLabel}>Last Update</Text>
-                <Text style={styles.statValue}>{lastUpdateTime}</Text>
+                <Text style={styles.infoLabel}>Time Remaining</Text>
+                <Text style={styles.infoValue}>{timeRemainingText}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Live Stats */}
+          {trackingData.lastLocation && (
+            <View style={styles.statsCard}>
+              <Text style={styles.statsTitle}>Live Stats</Text>
+              <View style={styles.statsGrid}>
+                <View style={styles.statItem}>
+                  <IconSymbol
+                    ios_icon_name="speedometer"
+                    android_material_icon_name="speed"
+                    size={24}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.statLabel}>Speed</Text>
+                  <Text style={styles.statValue}>{speedText}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <IconSymbol
+                    ios_icon_name="battery.100"
+                    android_material_icon_name="battery-full"
+                    size={24}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.statLabel}>Battery</Text>
+                  <Text style={styles.statValue}>{batteryText}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Auto-refresh indicator */}
-        <View style={styles.refreshIndicator}>
-          <IconSymbol
-            ios_icon_name="arrow.clockwise"
-            android_material_icon_name="refresh"
-            size={16}
-            color={colors.textSecondary}
-          />
-          <Text style={styles.refreshText}>Auto-refreshing every 5 seconds</Text>
-        </View>
-      </ScrollView>
+          {/* Location History Count */}
+          <View style={styles.historyCard}>
+            <IconSymbol
+              ios_icon_name="map.fill"
+              android_material_icon_name="map"
+              size={20}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.historyText}>
+              {trackingData.locationHistory.length} location updates recorded
+            </Text>
+          </View>
+        </ScrollView>
+      ) : null}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   scrollContent: {
+    padding: 20,
     paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: 16,
   },
   loadingText: {
@@ -356,25 +401,29 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 40,
     gap: 16,
   },
-  errorTitle: {
-    fontSize: 24,
+  errorText: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
+    textAlign: 'center',
   },
-  errorText: {
-    fontSize: 16,
+  errorSubtext: {
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
   },
   mapContainer: {
-    height: 400,
-    backgroundColor: colors.card,
+    height: 300,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   map: {
     flex: 1,
@@ -383,19 +432,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
-    margin: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 16,
   },
   statusHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: 8,
   },
   statusDot: {
     width: 12,
@@ -407,30 +452,49 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  lastUpdateText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  infoCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 16,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
   infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
   infoLabel: {
     fontSize: 14,
     color: colors.textSecondary,
+    flex: 1,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,
   },
-  locationCard: {
+  statsCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
-    marginHorizontal: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  cardTitle: {
+  statsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
@@ -438,38 +502,36 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
   },
   statItem: {
     flex: 1,
-    minWidth: '45%',
     backgroundColor: colors.cardSecondary,
     borderRadius: 12,
     padding: 16,
-    gap: 8,
     alignItems: 'center',
+    gap: 8,
   },
   statLabel: {
     fontSize: 12,
     color: colors.textSecondary,
-    textAlign: 'center',
   },
   statValue: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: 'bold',
     color: colors.text,
-    textAlign: 'center',
   },
-  refreshIndicator: {
+  historyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 16,
     gap: 8,
-    marginHorizontal: 20,
   },
-  refreshText: {
-    fontSize: 12,
+  historyText: {
+    fontSize: 14,
     color: colors.textSecondary,
   },
 });

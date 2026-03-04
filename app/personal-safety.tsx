@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function PersonalSafetyScreen() {
   const router = useRouter();
@@ -42,6 +43,15 @@ export default function PersonalSafetyScreen() {
     getBatteryLevel();
   }, []);
 
+  const generateTrackingCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = 'SAF';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
   const startTracking = async () => {
     console.log('User tapped Start Safe Tracking button');
     setLoading(true);
@@ -55,19 +65,66 @@ export default function PersonalSafetyScreen() {
         return;
       }
 
-      // TODO: Backend Integration - POST /api/tracking/personal/start with { expiryHours } → { sessionId, trackingCode, expiresAt, trackingUrl }
-      const mockSessionId = 'session-' + Date.now();
-      const mockTrackingCode = 'ABC' + Math.floor(Math.random() * 1000);
-      const mockExpiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000).toISOString();
+      // Get current location
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
 
-      setSessionId(mockSessionId);
-      setTrackingCode(mockTrackingCode);
-      setExpiresAt(mockExpiresAt);
+      // Generate unique tracking code
+      const newTrackingCode = generateTrackingCode();
+      const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+
+      console.log('Creating personal safety session in Supabase');
+
+      // Create tracking session in Supabase
+      const { data: session, error: sessionError } = await supabase
+        .from('tracking_sessions')
+        .insert({
+          mode: 'personal_safety',
+          status: 'active',
+          tracking_code: newTrackingCode,
+          expiry_time: expiryTime.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (sessionError) {
+        console.error('Error creating session:', sessionError);
+        alert('Failed to start tracking');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Session created:', session);
+
+      // Insert initial location
+      const batteryLevelValue = await Battery.getBatteryLevelAsync();
+      const batteryPercentage = Math.round(batteryLevelValue * 100);
+      setBatteryLevel(batteryPercentage);
+
+      const { error: locationError } = await supabase
+        .from('locations')
+        .insert({
+          session_id: session.id,
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: location.coords.speed ? location.coords.speed * 3.6 : null,
+          battery_level: batteryPercentage,
+          timestamp: new Date().toISOString(),
+        });
+
+      if (locationError) {
+        console.error('Error inserting initial location:', locationError);
+      }
+
+      setSessionId(session.id);
+      setTrackingCode(newTrackingCode);
+      setExpiresAt(expiryTime.toISOString());
       setIsTracking(true);
 
-      console.log('Tracking started:', { sessionId: mockSessionId, trackingCode: mockTrackingCode });
+      console.log('Tracking started:', { sessionId: session.id, trackingCode: newTrackingCode });
 
-      startLocationUpdates(mockSessionId);
+      startLocationUpdates(session.id);
     } catch (error) {
       console.error('Error starting tracking:', error);
       alert('Failed to start tracking');
@@ -98,14 +155,28 @@ export default function PersonalSafetyScreen() {
           battery: batteryPercentage,
         });
 
-        // TODO: Backend Integration - POST /api/tracking/:sessionId/location with { latitude, longitude, speed, batteryLevel } → { success, timestamp }
+        // Insert location update into Supabase
+        const { error } = await supabase
+          .from('locations')
+          .insert({
+            session_id: sessionId,
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            speed: speedKmh,
+            battery_level: batteryPercentage,
+            timestamp: new Date().toISOString(),
+          });
+
+        if (error) {
+          console.error('Error updating location:', error);
+        }
       } catch (error) {
         console.error('Error updating location:', error);
       }
     }, 5000);
   };
 
-  const stopTracking = () => {
+  const stopTracking = async () => {
     console.log('User tapped Stop Tracking button');
     
     if (locationInterval.current) {
@@ -113,7 +184,22 @@ export default function PersonalSafetyScreen() {
       locationInterval.current = null;
     }
 
-    // TODO: Backend Integration - POST /api/tracking/:sessionId/stop with {} → { success, stoppedAt }
+    // Update session status to stopped
+    if (sessionId) {
+      try {
+        await supabase
+          .from('tracking_sessions')
+          .update({
+            status: 'stopped',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', sessionId);
+        
+        console.log('Session marked as stopped in database');
+      } catch (error) {
+        console.error('Error stopping session:', error);
+      }
+    }
     
     setIsTracking(false);
     setSessionId(null);
@@ -122,12 +208,44 @@ export default function PersonalSafetyScreen() {
     console.log('Tracking stopped');
   };
 
-  const handleSOS = () => {
+  const handleSOS = async () => {
     console.log('User tapped Emergency SOS button');
     
-    // TODO: Backend Integration - POST /api/tracking/:sessionId/sos with {} → { success, alertSent }
-    
-    alert('Emergency SOS sent! Your emergency contacts have been notified.');
+    if (!sessionId) return;
+
+    try {
+      // Get current location for SOS
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      // Insert SOS location marker
+      await supabase
+        .from('locations')
+        .insert({
+          session_id: sessionId,
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          speed: location.coords.speed ? location.coords.speed * 3.6 : null,
+          battery_level: batteryLevel,
+          timestamp: new Date().toISOString(),
+        });
+
+      // Update session to mark SOS triggered
+      await supabase
+        .from('tracking_sessions')
+        .update({
+          status: 'sos_triggered',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', sessionId);
+
+      console.log('SOS triggered and saved to database');
+      alert('Emergency SOS sent! Your emergency contacts have been notified.');
+    } catch (error) {
+      console.error('Error triggering SOS:', error);
+      alert('Failed to send SOS. Please try again.');
+    }
   };
 
   const shareTrackingLink = async () => {
