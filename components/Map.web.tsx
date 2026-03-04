@@ -1,97 +1,109 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, ViewStyle } from 'react-native';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
 import L from 'leaflet';
-
-// Fix for default marker icon in leaflet
-const iconRetinaUrl = require('leaflet/dist/images/marker-icon-2x.png');
-const iconUrl = require('leaflet/dist/images/marker-icon.png');
-const shadowUrl = require('leaflet/dist/images/marker-shadow.png');
-
-// Only run on client side (safe check)
-if (typeof window !== 'undefined') {
-    delete (L.Icon.Default.prototype as any)._getIconUrl;
-    L.Icon.Default.mergeOptions({
-        iconRetinaUrl: iconRetinaUrl,
-        iconUrl: iconUrl,
-        shadowUrl: shadowUrl,
-    });
-}
+import 'leaflet/dist/leaflet.css';
 
 export interface MapMarker {
-    id: string;
-    latitude: number;
-    longitude: number;
-    title?: string;
-    description?: string;
+  id: string;
+  latitude: number;
+  longitude: number;
+  title?: string;
+  description?: string;
 }
 
 interface MapProps {
-    markers?: MapMarker[];
-    initialRegion?: {
-        latitude: number;
-        longitude: number;
-        latitudeDelta: number;
-        longitudeDelta: number;
-    };
-    style?: ViewStyle;
-    showsUserLocation?: boolean;
+  markers?: MapMarker[];
+  initialRegion?: {
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  };
+  style?: ViewStyle;
+  showsUserLocation?: boolean;
+  onMapPress?: (latitude: number, longitude: number) => void;
 }
 
-export const Map = ({
-    markers = [],
-    initialRegion = {
-        latitude: 37.78825,
-        longitude: -122.4324,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
-    },
-    style,
-    showsUserLocation = false
-}: MapProps) => {
+export function Map({
+  markers = [],
+  initialRegion = {
+    latitude: 37.78825,
+    longitude: -122.4324,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  },
+  style,
+  showsUserLocation = false,
+  onMapPress,
+}: MapProps) {
+  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const markersRef = useRef<L.Marker[]>([]);
 
-    const zoom = 13;
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
 
-    return (
-        <View style={[styles.container, style]}>
-            {/* MapContainer needs a fixed height/width context. React Native Web View provides flex layout, 
-          so direct child div with 100% should work */}
-            <div style={{ height: '100%', width: '100%', minHeight: 200 }}>
-                {typeof window !== 'undefined' && (
-                    <MapContainer
-                        center={[initialRegion.latitude, initialRegion.longitude]}
-                        zoom={zoom}
-                        scrollWheelZoom={false}
-                        style={{ height: '100%', width: '100%' }}
-                    >
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        {markers.map((marker) => (
-                            <Marker
-                                key={marker.id}
-                                position={[marker.latitude, marker.longitude]}
-                            >
-                                <Popup>
-                                    {marker.title} <br /> {marker.description}
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </MapContainer>
-                )}
-            </div>
-        </View>
-    );
-};
+    // Initialize map
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: true,
+      attributionControl: false,
+    }).setView([initialRegion.latitude, initialRegion.longitude], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    // Handle map clicks
+    if (onMapPress) {
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        onMapPress(e.latlng.lat, e.latlng.lng);
+      });
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [initialRegion.latitude, initialRegion.longitude, onMapPress]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+
+    // Add new markers
+    markers.forEach(markerData => {
+      const marker = L.marker([markerData.latitude, markerData.longitude]).addTo(mapRef.current!);
+      if (markerData.title) {
+        marker.bindPopup(markerData.title);
+      }
+      markersRef.current.push(marker);
+    });
+
+    // Fit bounds if there are markers
+    if (markers.length > 0) {
+      const bounds = L.latLngBounds(markers.map(m => [m.latitude, m.longitude]));
+      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [markers]);
+
+  return (
+    <View style={[styles.container, style]}>
+      <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        overflow: 'hidden',
-        borderRadius: 12,
-        width: '100%',
-        minHeight: 200,
-    },
+  container: {
+    flex: 1,
+    overflow: 'hidden',
+  },
 });

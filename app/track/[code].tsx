@@ -23,6 +23,9 @@ interface TrackingData {
   orderId?: string;
   customerName?: string;
   deliveryStatus?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
+  destinationAddress?: string;
   lastLocation?: {
     latitude: number;
     longitude: number;
@@ -104,6 +107,9 @@ export default function PublicTrackingScreen() {
         orderId: session.order_id || undefined,
         customerName: session.customer_name || undefined,
         deliveryStatus: session.delivery_status || undefined,
+        destinationLatitude: session.destination_latitude || undefined,
+        destinationLongitude: session.destination_longitude || undefined,
+        destinationAddress: session.destination_address || undefined,
         lastLocation: lastLocation ? {
           latitude: lastLocation.latitude,
           longitude: lastLocation.longitude,
@@ -200,6 +206,25 @@ export default function PublicTrackingScreen() {
     ? `${trackingData.lastLocation.batteryLevel}%`
     : 'N/A';
 
+  // Prepare map markers
+  const mapMarkers = [];
+  if (trackingData?.lastLocation) {
+    mapMarkers.push({
+      id: 'current',
+      latitude: trackingData.lastLocation.latitude,
+      longitude: trackingData.lastLocation.longitude,
+      title: 'Current Location',
+    });
+  }
+  if (trackingData?.destinationLatitude && trackingData?.destinationLongitude) {
+    mapMarkers.push({
+      id: 'destination',
+      latitude: trackingData.destinationLatitude,
+      longitude: trackingData.destinationLongitude,
+      title: 'Destination',
+    });
+  }
+
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
@@ -236,22 +261,15 @@ export default function PublicTrackingScreen() {
           }
         >
           {/* Map */}
-          {trackingData.lastLocation && (
+          {mapMarkers.length > 0 && (
             <View style={styles.mapContainer}>
               <Map
-                markers={[
-                  {
-                    id: '1',
-                    latitude: trackingData.lastLocation.latitude,
-                    longitude: trackingData.lastLocation.longitude,
-                    title: 'Current Location',
-                  },
-                ]}
+                markers={mapMarkers}
                 initialRegion={{
-                  latitude: trackingData.lastLocation.latitude,
-                  longitude: trackingData.lastLocation.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
+                  latitude: trackingData.lastLocation?.latitude || mapMarkers[0].latitude,
+                  longitude: trackingData.lastLocation?.longitude || mapMarkers[0].longitude,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
                 }}
                 style={styles.map}
               />
@@ -320,6 +338,19 @@ export default function PublicTrackingScreen() {
                 />
                 <Text style={styles.infoLabel}>Delivery Status</Text>
                 <Text style={styles.infoValue}>{trackingData.deliveryStatus}</Text>
+              </View>
+            )}
+
+            {trackingData.destinationAddress && (
+              <View style={styles.infoRow}>
+                <IconSymbol
+                  ios_icon_name="mappin.circle.fill"
+                  android_material_icon_name="place"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.infoLabel}>Destination</Text>
+                <Text style={styles.infoValue}>{trackingData.destinationAddress}</Text>
               </View>
             )}
 
