@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Share,
   Linking,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,14 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 
+interface Favorite {
+  id: string;
+  label: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
 export default function PersonalSafetyScreen() {
   const router = useRouter();
   const [isTracking, setIsTracking] = useState(false);
@@ -29,6 +38,8 @@ export default function PersonalSafetyScreen() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('PersonalSafetyScreen: Rendering');
@@ -41,7 +52,32 @@ export default function PersonalSafetyScreen() {
       console.log('Battery level:', percentage);
     };
     getBatteryLevel();
+    fetchFavorites();
   }, []);
+
+  const fetchFavorites = async () => {
+    console.log('Fetching favorites');
+    setLoadingFavorites(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('Error fetching favorites:', error);
+      } else {
+        console.log('Favorites fetched:', data);
+        setFavorites(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
 
   const generateTrackingCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -60,23 +96,20 @@ export default function PersonalSafetyScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('Location permission denied');
-        alert('Location permission is required for tracking');
+        Alert.alert('Permission Required', 'Location permission is required for tracking');
         setLoading(false);
         return;
       }
 
-      // Get current location
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
 
-      // Generate unique tracking code
       const newTrackingCode = generateTrackingCode();
       const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
       console.log('Creating personal safety session in Supabase');
 
-      // Create tracking session in Supabase
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
         .insert({
@@ -90,14 +123,13 @@ export default function PersonalSafetyScreen() {
 
       if (sessionError) {
         console.error('Error creating session:', sessionError);
-        alert('Failed to start tracking');
+        Alert.alert('Error', 'Failed to start tracking');
         setLoading(false);
         return;
       }
 
       console.log('Session created:', session);
 
-      // Insert initial location
       const batteryLevelValue = await Battery.getBatteryLevelAsync();
       const batteryPercentage = Math.round(batteryLevelValue * 100);
       setBatteryLevel(batteryPercentage);
@@ -127,7 +159,7 @@ export default function PersonalSafetyScreen() {
       startLocationUpdates(session.id);
     } catch (error) {
       console.error('Error starting tracking:', error);
-      alert('Failed to start tracking');
+      Alert.alert('Error', 'Failed to start tracking');
     } finally {
       setLoading(false);
     }
@@ -155,7 +187,6 @@ export default function PersonalSafetyScreen() {
           battery: batteryPercentage,
         });
 
-        // Insert location update into Supabase
         const { error } = await supabase
           .from('locations')
           .insert({
@@ -184,7 +215,6 @@ export default function PersonalSafetyScreen() {
       locationInterval.current = null;
     }
 
-    // Update session status to stopped
     if (sessionId) {
       try {
         await supabase
@@ -214,12 +244,10 @@ export default function PersonalSafetyScreen() {
     if (!sessionId) return;
 
     try {
-      // Get current location for SOS
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
 
-      // Insert SOS location marker
       await supabase
         .from('locations')
         .insert({
@@ -231,7 +259,6 @@ export default function PersonalSafetyScreen() {
           timestamp: new Date().toISOString(),
         });
 
-      // Update session to mark SOS triggered
       await supabase
         .from('tracking_sessions')
         .update({
@@ -241,10 +268,10 @@ export default function PersonalSafetyScreen() {
         .eq('id', sessionId);
 
       console.log('SOS triggered and saved to database');
-      alert('Emergency SOS sent! Your emergency contacts have been notified.');
+      Alert.alert('Emergency SOS', 'Emergency SOS sent! Your emergency contacts have been notified.');
     } catch (error) {
       console.error('Error triggering SOS:', error);
-      alert('Failed to send SOS. Please try again.');
+      Alert.alert('Error', 'Failed to send SOS. Please try again.');
     }
   };
 
@@ -272,8 +299,36 @@ export default function PersonalSafetyScreen() {
     
     console.log('User tapped WhatsApp share button');
     Linking.openURL(whatsappUrl).catch(() => {
-      alert('WhatsApp is not installed');
+      Alert.alert('Error', 'WhatsApp is not installed');
     });
+  };
+
+  const handleNavigateToFavorite = (favorite: Favorite) => {
+    console.log('User tapped favorite location:', favorite.label);
+    
+    const googleMapsUrl = Platform.select({
+      ios: `comgooglemaps://?daddr=${favorite.latitude},${favorite.longitude}&directionsmode=driving`,
+      android: `google.navigation:q=${favorite.latitude},${favorite.longitude}&mode=d`,
+    });
+
+    const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${favorite.latitude},${favorite.longitude}`;
+
+    console.log('Opening Google Maps for navigation to:', favorite.label);
+
+    Linking.canOpenURL(googleMapsUrl || fallbackUrl).then((supported) => {
+      if (supported && googleMapsUrl) {
+        Linking.openURL(googleMapsUrl);
+      } else {
+        Linking.openURL(fallbackUrl);
+      }
+    }).catch(() => {
+      Linking.openURL(fallbackUrl);
+    });
+  };
+
+  const handleManageFavorites = () => {
+    console.log('User tapped Manage Favorites button');
+    router.push('/favorites');
   };
 
   const expiryTimeRemaining = expiresAt ? new Date(expiresAt).getTime() - Date.now() : 0;
@@ -295,14 +350,12 @@ export default function PersonalSafetyScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {!isTracking ? (
           <>
-            {/* Setup Card */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Start Safe Tracking</Text>
               <Text style={styles.cardDescription}>
                 Share your live location with trusted contacts. Choose how long you want to be tracked.
               </Text>
 
-              {/* Expiry Options */}
               <View style={styles.expiryOptions}>
                 <TouchableOpacity
                   style={[styles.expiryButton, expiryHours === 1 && styles.expiryButtonActive]}
@@ -330,7 +383,6 @@ export default function PersonalSafetyScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Start Button */}
               <TouchableOpacity
                 style={styles.startButton}
                 onPress={startTracking}
@@ -359,7 +411,56 @@ export default function PersonalSafetyScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Features */}
+            {/* Favorite Locations */}
+            <View style={styles.favoritesCard}>
+              <View style={styles.favoritesHeader}>
+                <Text style={styles.favoritesTitle}>Favorite Locations</Text>
+                <TouchableOpacity onPress={handleManageFavorites}>
+                  <Text style={styles.manageText}>Manage</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingFavorites ? (
+                <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 20 }} />
+              ) : favorites.length === 0 ? (
+                <View style={styles.noFavorites}>
+                  <Text style={styles.noFavoritesText}>No favorite locations saved</Text>
+                  <TouchableOpacity onPress={handleManageFavorites}>
+                    <Text style={styles.addFavoriteLink}>Add your first favorite</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.favoritesList}>
+                  {favorites.map((favorite) => (
+                    <TouchableOpacity
+                      key={favorite.id}
+                      style={styles.favoriteItem}
+                      onPress={() => handleNavigateToFavorite(favorite)}
+                    >
+                      <View style={styles.favoriteIcon}>
+                        <IconSymbol
+                          ios_icon_name="star.fill"
+                          android_material_icon_name="star"
+                          size={20}
+                          color={colors.accent}
+                        />
+                      </View>
+                      <View style={styles.favoriteInfo}>
+                        <Text style={styles.favoriteLabel}>{favorite.label}</Text>
+                        <Text style={styles.favoriteAddress}>{favorite.address}</Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="arrow.right"
+                        android_material_icon_name="navigation"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
             <View style={styles.featuresCard}>
               <Text style={styles.featuresTitle}>Features</Text>
               <View style={styles.featuresList}>
@@ -404,7 +505,6 @@ export default function PersonalSafetyScreen() {
           </>
         ) : (
           <>
-            {/* Active Tracking Card */}
             <View style={styles.activeCard}>
               <View style={styles.activeHeader}>
                 <View style={styles.pulseContainer}>
@@ -420,13 +520,11 @@ export default function PersonalSafetyScreen() {
                 <Text style={styles.activeSubtitle}>Your location is being shared</Text>
               </View>
 
-              {/* Tracking Code */}
               <View style={styles.trackingCodeCard}>
                 <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
                 <Text style={styles.trackingCode}>{trackingCode}</Text>
               </View>
 
-              {/* Stats */}
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <IconSymbol
@@ -450,7 +548,6 @@ export default function PersonalSafetyScreen() {
                 </View>
               </View>
 
-              {/* Share Buttons */}
               <View style={styles.shareButtons}>
                 <TouchableOpacity style={styles.shareButton} onPress={shareTrackingLink}>
                   <IconSymbol
@@ -472,7 +569,6 @@ export default function PersonalSafetyScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* SOS Button */}
               <TouchableOpacity style={styles.sosButton} onPress={handleSOS}>
                 <LinearGradient
                   colors={[colors.danger, '#CC0000']}
@@ -490,7 +586,6 @@ export default function PersonalSafetyScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Stop Button */}
               <TouchableOpacity style={styles.stopButton} onPress={stopTracking}>
                 <Text style={styles.stopButtonText}>Stop Tracking</Text>
               </TouchableOpacity>
@@ -569,6 +664,76 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  favoritesCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  favoritesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  favoritesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  manageText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  noFavorites: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noFavoritesText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  addFavoriteLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  favoritesList: {
+    gap: 8,
+  },
+  favoriteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  favoriteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  favoriteInfo: {
+    flex: 1,
+  },
+  favoriteLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  favoriteAddress: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   featuresCard: {
     backgroundColor: colors.card,

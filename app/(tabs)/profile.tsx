@@ -1,96 +1,92 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 
 export default function ProfileScreen() {
+  const router = useRouter();
+
   console.log('ProfileScreen: Rendering');
+
+  const menuItems = [
+    {
+      id: 'privacy',
+      title: 'Privacy Policy',
+      icon: 'security',
+      route: '/privacy-policy',
+    },
+    {
+      id: 'terms',
+      title: 'Terms of Service',
+      icon: 'description',
+      route: '/terms-of-service',
+    },
+  ];
+
+  const handleMenuPress = (route: string) => {
+    console.log('User tapped menu item, navigating to:', route);
+    router.push(route as any);
+  };
 
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
         options={{
-          headerShown: false,
+          headerShown: true,
+          title: 'Settings',
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
         }}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.avatarContainer}>
+          <View style={styles.iconContainer}>
             <IconSymbol
-              ios_icon_name="person.fill"
-              android_material_icon_name="person"
-              size={48}
-              color={colors.text}
+              ios_icon_name="person.circle.fill"
+              android_material_icon_name="account-circle"
+              size={80}
+              color={colors.accent}
             />
           </View>
-          <Text style={styles.name}>TrackMe User</Text>
-          <Text style={styles.email}>user@trackme.lk</Text>
+          <Text style={styles.appName}>TrackMe LK</Text>
+          <Text style={styles.appVersion}>Version 1.0.0</Text>
         </View>
 
-        {/* Stats Card */}
-        <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>Your Activity</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          {menuItems.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.menuItem}
+              onPress={() => handleMenuPress(item.route)}
+            >
+              <View style={styles.menuItemLeft}>
+                <IconSymbol
+                  ios_icon_name={item.icon}
+                  android_material_icon_name={item.icon}
+                  size={24}
+                  color={colors.text}
+                />
+                <Text style={styles.menuItemText}>{item.title}</Text>
+              </View>
               <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="security"
-                size={24}
-                color={colors.primary}
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
               />
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Safety Sessions</Text>
-            </View>
-            <View style={styles.statItem}>
-              <IconSymbol
-                ios_icon_name="shippingbox.fill"
-                android_material_icon_name="local-shipping"
-                size={24}
-                color={colors.accent}
-              />
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Deliveries</Text>
-            </View>
-          </View>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Info Card */}
-        <View style={styles.infoCard}>
-          <IconSymbol
-            ios_icon_name="info.circle.fill"
-            android_material_icon_name="info"
-            size={24}
-            color={colors.primary}
-          />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>About TrackMe LK</Text>
-            <Text style={styles.infoText}>
-              Live GPS tracking for personal safety and delivery management. Designed for Sri Lanka.
-            </Text>
-          </View>
-        </View>
-
-        {/* Language Support */}
-        <View style={styles.languageCard}>
-          <Text style={styles.languageTitle}>Language Support</Text>
-          <View style={styles.languageList}>
-            <View style={styles.languageItem}>
-              <Text style={styles.languageFlag}>🇬🇧</Text>
-              <Text style={styles.languageText}>English</Text>
-            </View>
-            <View style={styles.languageItem}>
-              <Text style={styles.languageFlag}>🇱🇰</Text>
-              <Text style={styles.languageText}>සිංහල (Sinhala)</Text>
-            </View>
-            <View style={styles.languageItem}>
-              <Text style={styles.languageFlag}>🇱🇰</Text>
-              <Text style={styles.languageText}>தமிழ் (Tamil)</Text>
-            </View>
-          </View>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            TrackMe LK provides real-time GPS tracking for personal safety and delivery services in Sri Lanka.
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -100,121 +96,69 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
-    marginTop: 20,
+    paddingVertical: 24,
   },
-  avatarContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
+  iconContainer: {
     marginBottom: 16,
-    borderWidth: 2,
-    borderColor: colors.primary,
   },
-  name: {
+  appName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 4,
   },
-  email: {
+  appVersion: {
     fontSize: 14,
     color: colors.textSecondary,
   },
-  statsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+  section: {
+    marginBottom: 24,
   },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 20,
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 12,
+    marginLeft: 4,
   },
-  statsGrid: {
+  menuItem: {
     flexDirection: 'row',
-    gap: 16,
-  },
-  statItem: {
-    flex: 1,
-    backgroundColor: colors.cardSecondary,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  menuItemText: {
+    fontSize: 16,
     color: colors.text,
+    fontWeight: '500',
   },
-  statLabel: {
-    fontSize: 12,
+  footer: {
+    marginTop: 32,
+    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  footerText: {
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-  },
-  infoCard: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    gap: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.textSecondary,
     lineHeight: 20,
-  },
-  languageCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  languageTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  languageList: {
-    gap: 12,
-  },
-  languageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
-  },
-  languageFlag: {
-    fontSize: 24,
-  },
-  languageText: {
-    fontSize: 14,
-    color: colors.textSecondary,
   },
 });

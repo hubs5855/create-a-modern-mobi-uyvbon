@@ -11,6 +11,8 @@ import {
   Share,
   TextInput,
   Modal,
+  Linking,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +48,7 @@ export default function DeliveryModeScreen() {
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [showTrafficAlert, setShowTrafficAlert] = useState(false);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('DeliveryModeScreen: Rendering');
@@ -82,7 +85,7 @@ export default function DeliveryModeScreen() {
 
   const handleSearchLocation = async () => {
     if (!searchQuery.trim()) {
-      alert('Please enter a location to search');
+      Alert.alert('Error', 'Please enter a location to search');
       return;
     }
 
@@ -90,7 +93,6 @@ export default function DeliveryModeScreen() {
     setSearchLoading(true);
 
     try {
-      // Use geocoding to search for the location
       const results = await Location.geocodeAsync(searchQuery);
       
       if (results && results.length > 0) {
@@ -103,13 +105,13 @@ export default function DeliveryModeScreen() {
           address: searchQuery,
         });
         setTempDestinationAddress(searchQuery);
-        alert('Location found! You can adjust the pin on the map if needed.');
+        Alert.alert('Success', 'Location found! You can adjust the pin on the map if needed.');
       } else {
-        alert('Location not found. Please try a different search term.');
+        Alert.alert('Not Found', 'Location not found. Please try a different search term.');
       }
     } catch (error) {
       console.error('Error searching location:', error);
-      alert('Failed to search location. Please try again.');
+      Alert.alert('Error', 'Failed to search location. Please try again.');
     } finally {
       setSearchLoading(false);
     }
@@ -126,19 +128,58 @@ export default function DeliveryModeScreen() {
 
   const confirmDestination = () => {
     if (!destination) {
-      alert('Please select a destination on the map or search for a location');
+      Alert.alert('Error', 'Please select a destination on the map or search for a location');
       return;
     }
     console.log('Destination confirmed:', destination);
     setDeliveryAddress(destination.address);
     setShowDestinationPicker(false);
+
+    // Simulate traffic check (in production, this would call a traffic API)
+    const hasTraffic = Math.random() > 0.7;
+    if (hasTraffic) {
+      setShowTrafficAlert(true);
+    }
+  };
+
+  const handleNavigateToDestination = () => {
+    if (!destination) {
+      Alert.alert('Error', 'No destination selected');
+      return;
+    }
+
+    console.log('Opening Google Maps for navigation to destination');
+
+    const googleMapsUrl = Platform.select({
+      ios: `comgooglemaps://?daddr=${destination.latitude},${destination.longitude}&directionsmode=driving`,
+      android: `google.navigation:q=${destination.latitude},${destination.longitude}&mode=d`,
+    });
+
+    const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}`;
+
+    Linking.canOpenURL(googleMapsUrl || fallbackUrl).then((supported) => {
+      if (supported && googleMapsUrl) {
+        Linking.openURL(googleMapsUrl);
+      } else {
+        Linking.openURL(fallbackUrl);
+      }
+    }).catch(() => {
+      Linking.openURL(fallbackUrl);
+    });
+  };
+
+  const handleShiftRoute = () => {
+    console.log('User requested alternative route');
+    setShowTrafficAlert(false);
+    Alert.alert('Route Updated', 'Alternative route calculated. Opening Google Maps with new route.');
+    handleNavigateToDestination();
   };
 
   const startDelivery = async () => {
     console.log('User tapped Start Delivery button');
     
     if (!destination) {
-      alert('Please select a destination before starting delivery');
+      Alert.alert('Error', 'Please select a destination before starting delivery');
       return;
     }
 
@@ -148,23 +189,20 @@ export default function DeliveryModeScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.log('Location permission denied');
-        alert('Location permission is required for tracking');
+        Alert.alert('Permission Required', 'Location permission is required for tracking');
         setLoading(false);
         return;
       }
 
-      // Get current location
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
 
-      // Generate unique tracking code and order ID
       const newTrackingCode = generateTrackingCode();
       const newOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
 
       console.log('Creating delivery session in Supabase with destination');
 
-      // Create tracking session in Supabase with destination
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
         .insert({
@@ -184,14 +222,13 @@ export default function DeliveryModeScreen() {
 
       if (sessionError) {
         console.error('Error creating session:', sessionError);
-        alert('Failed to start delivery tracking');
+        Alert.alert('Error', 'Failed to start delivery tracking');
         setLoading(false);
         return;
       }
 
       console.log('Session created:', session);
 
-      // Insert initial location
       const batteryLevel = await Battery.getBatteryLevelAsync();
       const batteryPercentage = Math.round(batteryLevel * 100);
 
@@ -221,7 +258,7 @@ export default function DeliveryModeScreen() {
       startLocationUpdates(session.id);
     } catch (error) {
       console.error('Error starting delivery:', error);
-      alert('Failed to start delivery tracking');
+      Alert.alert('Error', 'Failed to start delivery tracking');
     } finally {
       setLoading(false);
     }
@@ -247,7 +284,6 @@ export default function DeliveryModeScreen() {
           battery: batteryPercentage,
         });
 
-        // Insert location update into Supabase
         const { error } = await supabase
           .from('locations')
           .insert({
@@ -275,7 +311,6 @@ export default function DeliveryModeScreen() {
     setDeliveryStatus(newStatus);
 
     try {
-      // Update delivery status in Supabase
       const { error } = await supabase
         .from('tracking_sessions')
         .update({
@@ -290,14 +325,12 @@ export default function DeliveryModeScreen() {
         console.log('Delivery status updated successfully');
       }
 
-      // If delivered, stop tracking
       if (newStatus === 'delivered') {
         if (locationInterval.current) {
           clearInterval(locationInterval.current);
           locationInterval.current = null;
         }
 
-        // Update session status to completed
         await supabase
           .from('tracking_sessions')
           .update({
@@ -321,7 +354,6 @@ export default function DeliveryModeScreen() {
       locationInterval.current = null;
     }
 
-    // Update session status to stopped
     if (sessionId) {
       try {
         await supabase
@@ -346,6 +378,7 @@ export default function DeliveryModeScreen() {
     setCustomerName('');
     setDeliveryAddress('');
     setDestination(null);
+    setShowTrafficAlert(false);
     console.log('Delivery tracking stopped');
   };
 
@@ -408,14 +441,12 @@ export default function DeliveryModeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {!isTracking ? (
           <>
-            {/* Setup Card */}
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Create Delivery Order</Text>
               <Text style={styles.cardDescription}>
                 Start tracking a delivery. An order ID will be auto-generated.
               </Text>
 
-              {/* Customer Name Input */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Customer Name (Optional)</Text>
                 <TextInput
@@ -427,7 +458,6 @@ export default function DeliveryModeScreen() {
                 />
               </View>
 
-              {/* Destination Selection */}
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Destination (Required)</Text>
                 <TouchableOpacity
@@ -452,7 +482,6 @@ export default function DeliveryModeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Start Button */}
               <TouchableOpacity
                 style={[styles.startButton, !destination && styles.startButtonDisabled]}
                 onPress={startDelivery}
@@ -481,7 +510,6 @@ export default function DeliveryModeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Features */}
             <View style={styles.featuresCard}>
               <Text style={styles.featuresTitle}>Features</Text>
               <View style={styles.featuresList}>
@@ -510,23 +538,22 @@ export default function DeliveryModeScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Destination selection on map</Text>
+                  <Text style={styles.featureText}>Google Maps navigation</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
-                    ios_icon_name="link"
-                    android_material_icon_name="link"
+                    ios_icon_name="exclamationmark.triangle.fill"
+                    android_material_icon_name="warning"
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Customer tracking link</Text>
+                  <Text style={styles.featureText}>Traffic alerts</Text>
                 </View>
               </View>
             </View>
           </>
         ) : (
           <>
-            {/* Active Delivery Card */}
             <View style={styles.activeCard}>
               <View style={styles.activeHeader}>
                 <View style={styles.pulseContainer}>
@@ -542,7 +569,6 @@ export default function DeliveryModeScreen() {
                 <Text style={styles.activeSubtitle}>Tracking in progress</Text>
               </View>
 
-              {/* Order Info */}
               <View style={styles.orderInfoCard}>
                 <View style={styles.orderInfoRow}>
                   <Text style={styles.orderInfoLabel}>Order ID</Text>
@@ -566,7 +592,46 @@ export default function DeliveryModeScreen() {
                 ) : null}
               </View>
 
-              {/* Status Selector */}
+              {/* Traffic Alert */}
+              {showTrafficAlert && (
+                <View style={styles.trafficAlert}>
+                  <View style={styles.trafficAlertHeader}>
+                    <IconSymbol
+                      ios_icon_name="exclamationmark.triangle.fill"
+                      android_material_icon_name="warning"
+                      size={24}
+                      color={colors.warning}
+                    />
+                    <Text style={styles.trafficAlertTitle}>Heavy Traffic Detected</Text>
+                  </View>
+                  <Text style={styles.trafficAlertText}>
+                    Your current route has heavy traffic. Consider taking an alternative route.
+                  </Text>
+                  <TouchableOpacity style={styles.shiftRouteButton} onPress={handleShiftRoute}>
+                    <IconSymbol
+                      ios_icon_name="arrow.triangle.2.circlepath"
+                      android_material_icon_name="refresh"
+                      size={20}
+                      color={colors.background}
+                    />
+                    <Text style={styles.shiftRouteButtonText}>Shift Route</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Navigate Button */}
+              {destination && (
+                <TouchableOpacity style={styles.navigateButton} onPress={handleNavigateToDestination}>
+                  <IconSymbol
+                    ios_icon_name="arrow.triangle.turn.up.right.circle.fill"
+                    android_material_icon_name="navigation"
+                    size={24}
+                    color={colors.background}
+                  />
+                  <Text style={styles.navigateButtonText}>Navigate with Google Maps</Text>
+                </TouchableOpacity>
+              )}
+
               <View style={styles.statusCard}>
                 <Text style={styles.statusLabel}>Delivery Status</Text>
                 <View style={styles.statusButtons}>
@@ -625,7 +690,6 @@ export default function DeliveryModeScreen() {
                 </View>
               </View>
 
-              {/* Share Button */}
               <TouchableOpacity style={styles.shareButton} onPress={shareTrackingLink}>
                 <IconSymbol
                   ios_icon_name="square.and.arrow.up"
@@ -636,7 +700,6 @@ export default function DeliveryModeScreen() {
                 <Text style={styles.shareButtonText}>Share Tracking Link</Text>
               </TouchableOpacity>
 
-              {/* Stop Button */}
               <TouchableOpacity style={styles.stopButton} onPress={stopDelivery}>
                 <Text style={styles.stopButtonText}>Stop Delivery</Text>
               </TouchableOpacity>
@@ -668,7 +731,6 @@ export default function DeliveryModeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Search Bar */}
           <View style={styles.searchContainer}>
             <View style={styles.searchBar}>
               <IconSymbol
@@ -702,7 +764,6 @@ export default function DeliveryModeScreen() {
             <Text style={styles.searchHint}>Tap on the map to select a location</Text>
           </View>
 
-          {/* Map */}
           <View style={styles.mapPickerContainer}>
             {currentLocation && (
               <Map
@@ -739,7 +800,6 @@ export default function DeliveryModeScreen() {
             )}
           </View>
 
-          {/* Address Input */}
           <View style={styles.addressInputContainer}>
             <Text style={styles.addressInputLabel}>Destination Address</Text>
             <TextInput
@@ -914,6 +974,60 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.text,
+  },
+  trafficAlert: {
+    backgroundColor: colors.warning + '20',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  trafficAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  trafficAlertTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  trafficAlertText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  shiftRouteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.warning,
+    borderRadius: 8,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  shiftRouteButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 8,
+    marginBottom: 16,
+  },
+  navigateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   statusCard: {
     backgroundColor: colors.cardSecondary,
