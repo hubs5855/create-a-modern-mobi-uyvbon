@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
+import { t } from '@/utils/i18n';
 
 interface TrackingData {
   sessionType: string;
@@ -46,6 +47,7 @@ export default function PublicTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
 
   console.log('PublicTrackingScreen: Tracking code:', code);
 
@@ -59,6 +61,37 @@ export default function PublicTrackingScreen() {
 
     return () => clearInterval(interval);
   }, [code]);
+
+  // Update countdown timer every second
+  useEffect(() => {
+    if (!trackingData?.expiresAt) return;
+
+    const updateCountdown = () => {
+      const expiryTime = new Date(trackingData.expiresAt!).getTime();
+      const now = Date.now();
+      const diff = expiryTime - now;
+
+      if (diff <= 0) {
+        setTimeRemaining(t('expired'));
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      const hoursText = `${hours}h`;
+      const minutesText = `${minutes}m`;
+      const secondsText = `${seconds}s`;
+      
+      setTimeRemaining(`${hoursText} ${minutesText} ${secondsText}`);
+    };
+
+    updateCountdown();
+    const countdownInterval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(countdownInterval);
+  }, [trackingData?.expiresAt]);
 
   const fetchTrackingData = async (silent = false) => {
     if (!silent) {
@@ -78,7 +111,7 @@ export default function PublicTrackingScreen() {
 
       if (sessionError || !session) {
         console.error('Session not found:', sessionError);
-        setError('Tracking session not found');
+        setError(t('session_not_found'));
         setLoading(false);
         return;
       }
@@ -128,7 +161,7 @@ export default function PublicTrackingScreen() {
       setTrackingData(data);
     } catch (error) {
       console.error('Error fetching tracking data:', error);
-      setError('Failed to load tracking data');
+      setError(t('error'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,10 +182,10 @@ export default function PublicTrackingScreen() {
     const diffMins = Math.floor(diffSecs / 60);
 
     if (diffSecs < 60) {
-      const secondsText = `${diffSecs} seconds ago`;
+      const secondsText = `${diffSecs} ${t('seconds_ago')}`;
       return secondsText;
     } else if (diffMins < 60) {
-      const minutesText = `${diffMins} minutes ago`;
+      const minutesText = `${diffMins} ${t('minutes_ago')}`;
       return minutesText;
     } else {
       const timeText = date.toLocaleTimeString();
@@ -183,7 +216,7 @@ export default function PublicTrackingScreen() {
   const statusColor = trackingData ? getStatusColor(trackingData.status) : colors.textSecondary;
   const lastUpdateText = trackingData?.lastLocation?.timestamp 
     ? formatTimestamp(trackingData.lastLocation.timestamp)
-    : 'No updates yet';
+    : t('no_updates');
   const speedText = trackingData?.lastLocation?.speed 
     ? `${trackingData.lastLocation.speed.toFixed(1)} km/h`
     : 'N/A';
@@ -198,7 +231,7 @@ export default function PublicTrackingScreen() {
       id: 'current',
       latitude: trackingData.lastLocation.latitude,
       longitude: trackingData.lastLocation.longitude,
-      title: 'Current Location',
+      title: t('current_location'),
     });
   }
   if (trackingData?.destinationLatitude && trackingData?.destinationLongitude) {
@@ -206,16 +239,22 @@ export default function PublicTrackingScreen() {
       id: 'destination',
       latitude: trackingData.destinationLatitude,
       longitude: trackingData.destinationLongitude,
-      title: 'Destination',
+      title: t('destination'),
     });
   }
+
+  const sessionTypeText = trackingData?.sessionType === 'personal_safety' 
+    ? t('personal_safety_type') 
+    : t('delivery_type');
+  const statusText = trackingData?.status.toUpperCase() || '';
+  const locationUpdatesText = `${trackingData?.locationHistory.length || 0} ${t('location_updates')}`;
 
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Live Tracking',
+          title: t('live_tracking'),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerShadowVisible: false,
@@ -225,7 +264,7 @@ export default function PublicTrackingScreen() {
       {loading && !trackingData ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={styles.loadingText}>Loading tracking data...</Text>
+          <Text style={styles.loadingText}>{t('loading_tracking')}</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -236,7 +275,7 @@ export default function PublicTrackingScreen() {
             color={colors.danger}
           />
           <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorSubtext}>Please check the tracking code and try again</Text>
+          <Text style={styles.errorSubtext}>{t('check_code')}</Text>
         </View>
       ) : trackingData ? (
         <ScrollView
@@ -265,14 +304,14 @@ export default function PublicTrackingScreen() {
           <View style={styles.statusCard}>
             <View style={styles.statusHeader}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-              <Text style={styles.statusText}>{trackingData.status.toUpperCase()}</Text>
+              <Text style={styles.statusText}>{statusText}</Text>
             </View>
-            <Text style={styles.lastUpdateText}>Last updated: {lastUpdateText}</Text>
+            <Text style={styles.lastUpdateText}>{t('last_updated')}: {lastUpdateText}</Text>
           </View>
 
           {/* Session Info */}
           <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Session Information</Text>
+            <Text style={styles.infoTitle}>{t('session_information')}</Text>
             
             <View style={styles.infoRow}>
               <IconSymbol
@@ -281,11 +320,22 @@ export default function PublicTrackingScreen() {
                 size={20}
                 color={colors.accent}
               />
-              <Text style={styles.infoLabel}>Type</Text>
-              <Text style={styles.infoValue}>
-                {trackingData.sessionType === 'personal_safety' ? 'Personal Safety' : 'Delivery'}
-              </Text>
+              <Text style={styles.infoLabel}>{t('type')}</Text>
+              <Text style={styles.infoValue}>{sessionTypeText}</Text>
             </View>
+
+            {trackingData.expiresAt && (
+              <View style={styles.infoRow}>
+                <IconSymbol
+                  ios_icon_name="clock.fill"
+                  android_material_icon_name="schedule"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.infoLabel}>{t('time_remaining')}</Text>
+                <Text style={styles.infoValue}>{timeRemaining}</Text>
+              </View>
+            )}
 
             {trackingData.orderId && (
               <View style={styles.infoRow}>
@@ -295,7 +345,7 @@ export default function PublicTrackingScreen() {
                   size={20}
                   color={colors.accent}
                 />
-                <Text style={styles.infoLabel}>Order ID</Text>
+                <Text style={styles.infoLabel}>{t('order_id')}</Text>
                 <Text style={styles.infoValue}>{trackingData.orderId}</Text>
               </View>
             )}
@@ -308,7 +358,7 @@ export default function PublicTrackingScreen() {
                   size={20}
                   color={colors.accent}
                 />
-                <Text style={styles.infoLabel}>Customer</Text>
+                <Text style={styles.infoLabel}>{t('customer')}</Text>
                 <Text style={styles.infoValue}>{trackingData.customerName}</Text>
               </View>
             )}
@@ -321,7 +371,7 @@ export default function PublicTrackingScreen() {
                   size={20}
                   color={colors.accent}
                 />
-                <Text style={styles.infoLabel}>Delivery Status</Text>
+                <Text style={styles.infoLabel}>{t('delivery_status')}</Text>
                 <Text style={styles.infoValue}>{trackingData.deliveryStatus}</Text>
               </View>
             )}
@@ -334,7 +384,7 @@ export default function PublicTrackingScreen() {
                   size={20}
                   color={colors.accent}
                 />
-                <Text style={styles.infoLabel}>Destination</Text>
+                <Text style={styles.infoLabel}>{t('destination')}</Text>
                 <Text style={styles.infoValue}>{trackingData.destinationAddress}</Text>
               </View>
             )}
@@ -343,7 +393,7 @@ export default function PublicTrackingScreen() {
           {/* Live Stats */}
           {trackingData.lastLocation && (
             <View style={styles.statsCard}>
-              <Text style={styles.statsTitle}>Live Stats</Text>
+              <Text style={styles.statsTitle}>{t('live_stats')}</Text>
               <View style={styles.statsGrid}>
                 <View style={styles.statItem}>
                   <IconSymbol
@@ -352,7 +402,7 @@ export default function PublicTrackingScreen() {
                     size={24}
                     color={colors.primary}
                   />
-                  <Text style={styles.statLabel}>Speed</Text>
+                  <Text style={styles.statLabel}>{t('speed')}</Text>
                   <Text style={styles.statValue}>{speedText}</Text>
                 </View>
                 <View style={styles.statItem}>
@@ -362,7 +412,7 @@ export default function PublicTrackingScreen() {
                     size={24}
                     color={colors.accent}
                   />
-                  <Text style={styles.statLabel}>Battery</Text>
+                  <Text style={styles.statLabel}>{t('battery')}</Text>
                   <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
@@ -377,9 +427,7 @@ export default function PublicTrackingScreen() {
               size={20}
               color={colors.textSecondary}
             />
-            <Text style={styles.historyText}>
-              {trackingData.locationHistory.length} location updates recorded
-            </Text>
+            <Text style={styles.historyText}>{locationUpdatesText}</Text>
           </View>
         </ScrollView>
       ) : null}

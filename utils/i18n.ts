@@ -49,6 +49,7 @@ const translations = {
     on_the_way: 'On the Way',
     delivered: 'Delivered',
     current: 'Current',
+    current_location: 'Current Location',
     share_tracking_link: 'Share Tracking Link',
     stop_delivery: 'Stop Delivery',
     navigate_google_maps: 'Navigate with Google Maps',
@@ -70,6 +71,10 @@ const translations = {
     live_stats: 'Live Stats',
     speed: 'Speed',
     location_updates: 'location updates recorded',
+    no_updates: 'No updates yet',
+    seconds_ago: 'seconds ago',
+    minutes_ago: 'minutes ago',
+    expired: 'Expired',
     
     // Settings/Profile
     settings: 'Settings',
@@ -151,6 +156,7 @@ const translations = {
     on_the_way: 'මාර්ගයේ',
     delivered: 'බෙදා හැරිණි',
     current: 'වත්මන්',
+    current_location: 'වත්මන් ස්ථානය',
     share_tracking_link: 'ලුහුබැඳීමේ සබැඳිය බෙදා ගන්න',
     stop_delivery: 'බෙදාහැරීම නවත්වන්න',
     navigate_google_maps: 'Google Maps සමඟ සංචාලනය කරන්න',
@@ -172,6 +178,10 @@ const translations = {
     live_stats: 'සජීවී සංඛ්‍යාලේඛන',
     speed: 'වේගය',
     location_updates: 'ස්ථාන යාවත්කාලීන වාර්තා කර ඇත',
+    no_updates: 'යාවත්කාලීන කිරීම් නැත',
+    seconds_ago: 'තත්පර කට පෙර',
+    minutes_ago: 'මිනිත්තු කට පෙර',
+    expired: 'කල් ඉකුත් වී ඇත',
     
     // Settings/Profile
     settings: 'සැකසුම්',
@@ -253,6 +263,7 @@ const translations = {
     on_the_way: 'வழியில்',
     delivered: 'வழங்கப்பட்டது',
     current: 'தற்போதைய',
+    current_location: 'தற்போதைய இருப்பிடம்',
     share_tracking_link: 'கண்காணிப்பு இணைப்பைப் பகிரவும்',
     stop_delivery: 'விநியோகத்தை நிறுத்தவும்',
     navigate_google_maps: 'Google Maps உடன் வழிசெலுத்தவும்',
@@ -274,6 +285,10 @@ const translations = {
     live_stats: 'நேரடி புள்ளிவிவரங்கள்',
     speed: 'வேகம்',
     location_updates: 'இருப்பிட புதுப்பிப்புகள் பதிவு செய்யப்பட்டன',
+    no_updates: 'புதுப்பிப்புகள் இல்லை',
+    seconds_ago: 'விநாடிகளுக்கு முன்',
+    minutes_ago: 'நிமிடங்களுக்கு முன்',
+    expired: 'காலாவதியானது',
     
     // Settings/Profile
     settings: 'அமைப்புகள்',
