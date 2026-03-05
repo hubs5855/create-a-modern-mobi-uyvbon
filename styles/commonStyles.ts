@@ -6,6 +6,7 @@ export const colors = {
   // Dark theme base
   background: '#0A0E1A',
   card: '#141B2D',
+  cardBackground: '#141B2D',
   cardSecondary: '#1A2332',
   
   // Text
@@ -27,6 +28,7 @@ export const colors = {
   success: '#00FF88',
   warning: '#FFB800',
   danger: '#FF3B5C',
+  error: '#FF3B5C',
   info: '#2E7CF6',
   
   // UI elements
