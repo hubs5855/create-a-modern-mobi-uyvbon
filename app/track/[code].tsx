@@ -149,27 +149,15 @@ export default function PublicTrackingScreen() {
     const diffMins = Math.floor(diffSecs / 60);
 
     if (diffSecs < 60) {
-      return `${diffSecs} seconds ago`;
+      const secondsText = `${diffSecs} seconds ago`;
+      return secondsText;
     } else if (diffMins < 60) {
-      return `${diffMins} minutes ago`;
+      const minutesText = `${diffMins} minutes ago`;
+      return minutesText;
     } else {
-      return date.toLocaleTimeString();
+      const timeText = date.toLocaleTimeString();
+      return timeText;
     }
-  };
-
-  const getTimeRemaining = (expiresAt: string) => {
-    const now = new Date();
-    const expiry = new Date(expiresAt);
-    const diffMs = expiry.getTime() - now.getTime();
-
-    if (diffMs <= 0) {
-      return 'Expired';
-    }
-
-    const hours = Math.floor(diffMs / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    return `${hours}h ${minutes}m`;
   };
 
   const getStatusColor = (status: string) => {
@@ -196,9 +184,6 @@ export default function PublicTrackingScreen() {
   const lastUpdateText = trackingData?.lastLocation?.timestamp 
     ? formatTimestamp(trackingData.lastLocation.timestamp)
     : 'No updates yet';
-  const timeRemainingText = trackingData?.expiresAt 
-    ? getTimeRemaining(trackingData.expiresAt)
-    : null;
   const speedText = trackingData?.lastLocation?.speed 
     ? `${trackingData.lastLocation.speed.toFixed(1)} km/h`
     : 'N/A';
@@ -351,19 +336,6 @@ export default function PublicTrackingScreen() {
                 />
                 <Text style={styles.infoLabel}>Destination</Text>
                 <Text style={styles.infoValue}>{trackingData.destinationAddress}</Text>
-              </View>
-            )}
-
-            {timeRemainingText && (
-              <View style={styles.infoRow}>
-                <IconSymbol
-                  ios_icon_name="clock.fill"
-                  android_material_icon_name="schedule"
-                  size={20}
-                  color={colors.accent}
-                />
-                <Text style={styles.infoLabel}>Time Remaining</Text>
-                <Text style={styles.infoValue}>{timeRemainingText}</Text>
               </View>
             )}
           </View>

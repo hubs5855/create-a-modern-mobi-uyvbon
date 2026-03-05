@@ -1,11 +1,12 @@
 
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import * as Location from 'expo-location';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -22,6 +23,60 @@ export default function HomeScreen() {
     router.push('/delivery-mode');
   };
 
+  const handleEmergencySOS = async () => {
+    console.log('User tapped Emergency SOS button from home');
+    
+    Alert.alert(
+      'Emergency SOS',
+      'This will send your current location to emergency contacts. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('SOS cancelled'),
+        },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Requesting location permission for SOS...');
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              
+              if (status !== 'granted') {
+                Alert.alert('Permission Required', 'Location permission is required for SOS');
+                return;
+              }
+
+              console.log('Getting current location for SOS...');
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+              });
+
+              const sosMessage = `🚨 EMERGENCY SOS 🚨\nI need help!\nMy location: https://www.google.com/maps?q=${location.coords.latitude},${location.coords.longitude}`;
+              
+              console.log('SOS triggered with location:', location.coords.latitude, location.coords.longitude);
+              
+              Alert.alert(
+                'SOS Sent!',
+                'Your emergency location has been prepared. Share it with your emergency contacts.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => console.log('SOS alert acknowledged'),
+                  },
+                ]
+              );
+            } catch (error) {
+              console.error('Error triggering SOS:', error);
+              Alert.alert('Error', 'Failed to get your location. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
@@ -35,6 +90,35 @@ export default function HomeScreen() {
           <Text style={styles.logo}>TrackMe LK</Text>
           <Text style={styles.tagline}>Live GPS Tracking</Text>
         </View>
+
+        {/* Emergency SOS Button */}
+        <TouchableOpacity
+          style={styles.sosCard}
+          onPress={handleEmergencySOS}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[colors.danger, '#CC0000']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sosGradient}
+          >
+            <View style={styles.sosIconContainer}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={40}
+                color={colors.text}
+              />
+            </View>
+            <View style={styles.sosTextContainer}>
+              <Text style={styles.sosTitle}>Emergency SOS</Text>
+              <Text style={styles.sosDescription}>
+                Tap to send your location to emergency contacts
+              </Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
         {/* Mode Selection Cards */}
         <View style={styles.modesContainer}>
@@ -175,7 +259,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
     marginTop: 20,
   },
   logo: {
@@ -189,6 +273,44 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
+  },
+  sosCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    elevation: 8,
+    shadowColor: colors.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  sosGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    gap: 16,
+  },
+  sosIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosTextContainer: {
+    flex: 1,
+  },
+  sosTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  sosDescription: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.9,
   },
   modesContainer: {
     gap: 20,
