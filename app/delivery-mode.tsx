@@ -43,6 +43,7 @@ export default function DeliveryModeScreen() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [destination, setDestination] = useState<DestinationLocation | null>(null);
   const [showDestinationPicker, setShowDestinationPicker] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [tempDestinationAddress, setTempDestinationAddress] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -385,16 +386,46 @@ export default function DeliveryModeScreen() {
   const shareTrackingLink = async () => {
     if (!trackingCode) return;
     
+    console.log('User tapped Share button, opening share modal');
+    setShowShareModal(true);
+  };
+
+  const shareViaMethod = async (method: 'general' | 'whatsapp' | 'messenger') => {
+    if (!trackingCode) return;
+    
     const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
     const orderText = orderId ? `Order ${orderId}` : 'Your delivery';
-    console.log('User tapped Share button, sharing:', trackingUrl);
+    const message = `Track ${orderText}: ${trackingUrl}`;
+
+    console.log(`User sharing via ${method}:`, trackingUrl);
 
     try {
-      await Share.share({
-        message: `Track ${orderText}: ${trackingUrl}`,
-      });
+      if (method === 'whatsapp') {
+        const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        const canOpen = await Linking.canOpenURL(whatsappUrl);
+        if (canOpen) {
+          await Linking.openURL(whatsappUrl);
+        } else {
+          Alert.alert('Error', 'WhatsApp is not installed on this device');
+        }
+      } else if (method === 'messenger') {
+        const messengerUrl = `fb-messenger://share?link=${encodeURIComponent(trackingUrl)}`;
+        const canOpen = await Linking.canOpenURL(messengerUrl);
+        if (canOpen) {
+          await Linking.openURL(messengerUrl);
+        } else {
+          Alert.alert('Error', 'Messenger is not installed on this device');
+        }
+      } else {
+        await Share.share({
+          message: message,
+          url: trackingUrl,
+        });
+      }
+      setShowShareModal(false);
     } catch (error) {
       console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share tracking link');
     }
   };
 
@@ -813,6 +844,113 @@ export default function DeliveryModeScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* Share Options Modal */}
+      <Modal
+        visible={showShareModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        transparent={false}
+        onRequestClose={() => setShowShareModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowShareModal(false)}>
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Share Tracking Link</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <View style={styles.shareOptionsContainer}>
+            <Text style={styles.shareOptionsTitle}>Choose how to share</Text>
+            
+            <TouchableOpacity
+              style={styles.shareOption}
+              onPress={() => shareViaMethod('whatsapp')}
+            >
+              <View style={[styles.shareOptionIcon, { backgroundColor: '#25D366' }]}>
+                <IconSymbol
+                  ios_icon_name="message.fill"
+                  android_material_icon_name="message"
+                  size={28}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View style={styles.shareOptionInfo}>
+                <Text style={styles.shareOptionTitle}>WhatsApp</Text>
+                <Text style={styles.shareOptionDesc}>Share via WhatsApp</Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareOption}
+              onPress={() => shareViaMethod('messenger')}
+            >
+              <View style={[styles.shareOptionIcon, { backgroundColor: '#0084FF' }]}>
+                <IconSymbol
+                  ios_icon_name="message.fill"
+                  android_material_icon_name="message"
+                  size={28}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View style={styles.shareOptionInfo}>
+                <Text style={styles.shareOptionTitle}>Messenger</Text>
+                <Text style={styles.shareOptionDesc}>Share via Facebook Messenger</Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shareOption}
+              onPress={() => shareViaMethod('general')}
+            >
+              <View style={[styles.shareOptionIcon, { backgroundColor: colors.primary }]}>
+                <IconSymbol
+                  ios_icon_name="square.and.arrow.up"
+                  android_material_icon_name="share"
+                  size={28}
+                  color="#FFFFFF"
+                />
+              </View>
+              <View style={styles.shareOptionInfo}>
+                <Text style={styles.shareOptionTitle}>More Options</Text>
+                <Text style={styles.shareOptionDesc}>Share via other apps</Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+
+            <View style={styles.trackingCodeDisplay}>
+              <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
+              <Text style={styles.trackingCodeValue}>{trackingCode}</Text>
+              <Text style={styles.trackingUrlLabel}>Tracking URL</Text>
+              <Text style={styles.trackingUrlValue}>https://trackme.lk/track/{trackingCode}</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1203,5 +1341,75 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     minHeight: 60,
     textAlignVertical: 'top',
+  },
+  shareOptionsContainer: {
+    padding: 20,
+  },
+  shareOptionsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 20,
+  },
+  shareOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 16,
+  },
+  shareOptionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareOptionInfo: {
+    flex: 1,
+  },
+  shareOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  shareOptionDesc: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  trackingCodeDisplay: {
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  trackingCodeLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  trackingCodeValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.accent,
+    letterSpacing: 2,
+    marginBottom: 16,
+  },
+  trackingUrlLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  trackingUrlValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 });
