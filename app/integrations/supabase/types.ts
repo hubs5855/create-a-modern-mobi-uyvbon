@@ -1,3 +1,4 @@
+
 export type Json =
   | string
   | number
@@ -49,6 +50,9 @@ export type Database = {
           delivery_address: string | null
           delivery_status: string | null
           updated_at: string | null
+          destination_latitude: number | null
+          destination_longitude: number | null
+          destination_address: string | null
         }
         Insert: {
           id?: string
@@ -63,6 +67,9 @@ export type Database = {
           delivery_address?: string | null
           delivery_status?: string | null
           updated_at?: string | null
+          destination_latitude?: number | null
+          destination_longitude?: number | null
+          destination_address?: string | null
         }
         Update: {
           id?: string
@@ -77,6 +84,9 @@ export type Database = {
           delivery_address?: string | null
           delivery_status?: string | null
           updated_at?: string | null
+          destination_latitude?: number | null
+          destination_longitude?: number | null
+          destination_address?: string | null
         }
       }
       locations: {
@@ -109,6 +119,38 @@ export type Database = {
           battery_level?: number | null
           timestamp?: string | null
           created_at?: string | null
+        }
+      }
+      favorites: {
+        Row: {
+          id: string
+          user_id: string | null
+          label: string
+          address: string
+          latitude: number
+          longitude: number
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          label: string
+          address: string
+          latitude: number
+          longitude: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          label?: string
+          address?: string
+          latitude?: number
+          longitude?: number
+          created_at?: string | null
+          updated_at?: string | null
         }
       }
     }
