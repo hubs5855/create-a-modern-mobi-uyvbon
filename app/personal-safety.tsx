@@ -42,21 +42,26 @@ export default function PersonalSafetyScreen() {
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
 
-  console.log('PersonalSafetyScreen: Rendering');
+  console.log('PersonalSafetyScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
   useEffect(() => {
+    console.log('PersonalSafetyScreen: Component mounted, initializing...');
     const getBatteryLevel = async () => {
-      const level = await Battery.getBatteryLevelAsync();
-      const percentage = Math.round(level * 100);
-      setBatteryLevel(percentage);
-      console.log('Battery level:', percentage);
+      try {
+        const level = await Battery.getBatteryLevelAsync();
+        const percentage = Math.round(level * 100);
+        setBatteryLevel(percentage);
+        console.log('PersonalSafetyScreen: Battery level:', percentage);
+      } catch (error) {
+        console.error('PersonalSafetyScreen: Error getting battery level:', error);
+      }
     };
     getBatteryLevel();
     fetchFavorites();
   }, []);
 
   const fetchFavorites = async () => {
-    console.log('Fetching favorites');
+    console.log('PersonalSafetyScreen: Fetching favorites from Supabase...');
     setLoadingFavorites(true);
 
     try {
@@ -67,13 +72,13 @@ export default function PersonalSafetyScreen() {
         .limit(5);
 
       if (error) {
-        console.error('Error fetching favorites:', error);
+        console.error('PersonalSafetyScreen: Error fetching favorites:', error);
       } else {
-        console.log('Favorites fetched:', data);
+        console.log('PersonalSafetyScreen: Favorites fetched successfully:', data?.length || 0, 'items');
         setFavorites(data || []);
       }
     } catch (error) {
-      console.error('Error fetching favorites:', error);
+      console.error('PersonalSafetyScreen: Exception fetching favorites:', error);
     } finally {
       setLoadingFavorites(false);
     }
@@ -85,30 +90,35 @@ export default function PersonalSafetyScreen() {
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    console.log('PersonalSafetyScreen: Generated tracking code:', code);
     return code;
   };
 
   const startTracking = async () => {
-    console.log('User tapped Start Safe Tracking button');
+    console.log('PersonalSafetyScreen: User tapped Start Safe Tracking button');
     setLoading(true);
 
     try {
+      console.log('PersonalSafetyScreen: Requesting location permission...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('Location permission denied');
+        console.log('PersonalSafetyScreen: Location permission denied');
         Alert.alert('Permission Required', 'Location permission is required for tracking');
         setLoading(false);
         return;
       }
 
+      console.log('PersonalSafetyScreen: Getting current location...');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
+      console.log('PersonalSafetyScreen: Current location:', location.coords.latitude, location.coords.longitude);
 
       const newTrackingCode = generateTrackingCode();
       const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
-      console.log('Creating personal safety session in Supabase');
+      console.log('PersonalSafetyScreen: Creating personal safety session in Supabase...');
+      console.log('PersonalSafetyScreen: Expiry time:', expiryTime.toISOString());
 
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
@@ -122,18 +132,19 @@ export default function PersonalSafetyScreen() {
         .single();
 
       if (sessionError) {
-        console.error('Error creating session:', sessionError);
-        Alert.alert('Error', 'Failed to start tracking');
+        console.error('PersonalSafetyScreen: Error creating session:', sessionError);
+        Alert.alert('Error', 'Failed to start tracking: ' + sessionError.message);
         setLoading(false);
         return;
       }
 
-      console.log('Session created:', session);
+      console.log('PersonalSafetyScreen: Session created successfully:', session.id);
 
       const batteryLevelValue = await Battery.getBatteryLevelAsync();
       const batteryPercentage = Math.round(batteryLevelValue * 100);
       setBatteryLevel(batteryPercentage);
 
+      console.log('PersonalSafetyScreen: Inserting initial location...');
       const { error: locationError } = await supabase
         .from('locations')
         .insert({
@@ -146,7 +157,9 @@ export default function PersonalSafetyScreen() {
         });
 
       if (locationError) {
-        console.error('Error inserting initial location:', locationError);
+        console.error('PersonalSafetyScreen: Error inserting initial location:', locationError);
+      } else {
+        console.log('PersonalSafetyScreen: Initial location inserted successfully');
       }
 
       setSessionId(session.id);
@@ -154,11 +167,13 @@ export default function PersonalSafetyScreen() {
       setExpiresAt(expiryTime.toISOString());
       setIsTracking(true);
 
-      console.log('Tracking started:', { sessionId: session.id, trackingCode: newTrackingCode });
+      console.log('PersonalSafetyScreen: Tracking started successfully!');
+      console.log('PersonalSafetyScreen: Session ID:', session.id);
+      console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
 
       startLocationUpdates(session.id);
     } catch (error) {
-      console.error('Error starting tracking:', error);
+      console.error('PersonalSafetyScreen: Exception starting tracking:', error);
       Alert.alert('Error', 'Failed to start tracking');
     } finally {
       setLoading(false);
@@ -166,7 +181,7 @@ export default function PersonalSafetyScreen() {
   };
 
   const startLocationUpdates = (sessionId: string) => {
-    console.log('Starting location updates every 5 seconds');
+    console.log('PersonalSafetyScreen: Starting location updates every 5 seconds for session:', sessionId);
     
     locationInterval.current = setInterval(async () => {
       try {
@@ -180,7 +195,7 @@ export default function PersonalSafetyScreen() {
 
         const speedKmh = location.coords.speed ? location.coords.speed * 3.6 : 0;
 
-        console.log('Location update:', {
+        console.log('PersonalSafetyScreen: Location update:', {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
           speed: speedKmh,
@@ -199,24 +214,28 @@ export default function PersonalSafetyScreen() {
           });
 
         if (error) {
-          console.error('Error updating location:', error);
+          console.error('PersonalSafetyScreen: Error updating location:', error);
+        } else {
+          console.log('PersonalSafetyScreen: Location updated successfully');
         }
       } catch (error) {
-        console.error('Error updating location:', error);
+        console.error('PersonalSafetyScreen: Exception updating location:', error);
       }
     }, 5000);
   };
 
   const stopTracking = async () => {
-    console.log('User tapped Stop Tracking button');
+    console.log('PersonalSafetyScreen: User tapped Stop Tracking button');
     
     if (locationInterval.current) {
       clearInterval(locationInterval.current);
       locationInterval.current = null;
+      console.log('PersonalSafetyScreen: Location updates stopped');
     }
 
     if (sessionId) {
       try {
+        console.log('PersonalSafetyScreen: Marking session as stopped in database...');
         await supabase
           .from('tracking_sessions')
           .update({
@@ -225,9 +244,9 @@ export default function PersonalSafetyScreen() {
           })
           .eq('id', sessionId);
         
-        console.log('Session marked as stopped in database');
+        console.log('PersonalSafetyScreen: Session marked as stopped successfully');
       } catch (error) {
-        console.error('Error stopping session:', error);
+        console.error('PersonalSafetyScreen: Error stopping session:', error);
       }
     }
     
@@ -235,19 +254,24 @@ export default function PersonalSafetyScreen() {
     setSessionId(null);
     setTrackingCode(null);
     setExpiresAt(null);
-    console.log('Tracking stopped');
+    console.log('PersonalSafetyScreen: Tracking stopped, state reset');
   };
 
   const handleSOS = async () => {
-    console.log('User tapped Emergency SOS button');
+    console.log('PersonalSafetyScreen: User tapped Emergency SOS button');
     
-    if (!sessionId) return;
+    if (!sessionId) {
+      console.log('PersonalSafetyScreen: No active session for SOS');
+      return;
+    }
 
     try {
+      console.log('PersonalSafetyScreen: Getting current location for SOS...');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
 
+      console.log('PersonalSafetyScreen: Inserting SOS location...');
       await supabase
         .from('locations')
         .insert({
@@ -259,6 +283,7 @@ export default function PersonalSafetyScreen() {
           timestamp: new Date().toISOString(),
         });
 
+      console.log('PersonalSafetyScreen: Updating session status to SOS...');
       await supabase
         .from('tracking_sessions')
         .update({
@@ -267,44 +292,52 @@ export default function PersonalSafetyScreen() {
         })
         .eq('id', sessionId);
 
-      console.log('SOS triggered and saved to database');
+      console.log('PersonalSafetyScreen: SOS triggered successfully');
       Alert.alert('Emergency SOS', 'Emergency SOS sent! Your emergency contacts have been notified.');
     } catch (error) {
-      console.error('Error triggering SOS:', error);
+      console.error('PersonalSafetyScreen: Error triggering SOS:', error);
       Alert.alert('Error', 'Failed to send SOS. Please try again.');
     }
   };
 
   const shareTrackingLink = async () => {
-    if (!trackingCode) return;
+    if (!trackingCode) {
+      console.log('PersonalSafetyScreen: No tracking code to share');
+      return;
+    }
     
     const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
-    console.log('User tapped Share button, sharing:', trackingUrl);
+    console.log('PersonalSafetyScreen: User tapped Share button, sharing:', trackingUrl);
 
     try {
       await Share.share({
         message: `Track my live location: ${trackingUrl}`,
       });
+      console.log('PersonalSafetyScreen: Share sheet opened successfully');
     } catch (error) {
-      console.error('Error sharing:', error);
+      console.error('PersonalSafetyScreen: Error sharing:', error);
     }
   };
 
   const shareViaWhatsApp = () => {
-    if (!trackingCode) return;
+    if (!trackingCode) {
+      console.log('PersonalSafetyScreen: No tracking code to share via WhatsApp');
+      return;
+    }
     
     const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
     const message = `Track my live location: ${trackingUrl}`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
-    console.log('User tapped WhatsApp share button');
+    console.log('PersonalSafetyScreen: User tapped WhatsApp share button');
     Linking.openURL(whatsappUrl).catch(() => {
+      console.log('PersonalSafetyScreen: WhatsApp not installed');
       Alert.alert('Error', 'WhatsApp is not installed');
     });
   };
 
   const handleNavigateToFavorite = (favorite: Favorite) => {
-    console.log('User tapped favorite location:', favorite.label);
+    console.log('PersonalSafetyScreen: User tapped favorite location:', favorite.label);
     
     const googleMapsUrl = Platform.select({
       ios: `comgooglemaps://?daddr=${favorite.latitude},${favorite.longitude}&directionsmode=driving`,
@@ -313,7 +346,7 @@ export default function PersonalSafetyScreen() {
 
     const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${favorite.latitude},${favorite.longitude}`;
 
-    console.log('Opening Google Maps for navigation to:', favorite.label);
+    console.log('PersonalSafetyScreen: Opening Google Maps for navigation to:', favorite.label);
 
     Linking.canOpenURL(googleMapsUrl || fallbackUrl).then((supported) => {
       if (supported && googleMapsUrl) {
@@ -327,7 +360,7 @@ export default function PersonalSafetyScreen() {
   };
 
   const handleManageFavorites = () => {
-    console.log('User tapped Manage Favorites button');
+    console.log('PersonalSafetyScreen: User tapped Manage Favorites button');
     router.push('/favorites');
   };
 
@@ -335,6 +368,8 @@ export default function PersonalSafetyScreen() {
   const hoursRemaining = Math.floor(expiryTimeRemaining / (1000 * 60 * 60));
   const minutesRemaining = Math.floor((expiryTimeRemaining % (1000 * 60 * 60)) / (1000 * 60));
   const timeRemainingText = `${hoursRemaining}h ${minutesRemaining}m`;
+
+  console.log('PersonalSafetyScreen: Rendering UI, favorites count:', favorites.length);
 
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
@@ -359,7 +394,10 @@ export default function PersonalSafetyScreen() {
               <View style={styles.expiryOptions}>
                 <TouchableOpacity
                   style={[styles.expiryButton, expiryHours === 1 && styles.expiryButtonActive]}
-                  onPress={() => setExpiryHours(1)}
+                  onPress={() => {
+                    console.log('PersonalSafetyScreen: User selected 1 hour expiry');
+                    setExpiryHours(1);
+                  }}
                 >
                   <Text style={[styles.expiryButtonText, expiryHours === 1 && styles.expiryButtonTextActive]}>
                     1 Hour
@@ -367,7 +405,10 @@ export default function PersonalSafetyScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.expiryButton, expiryHours === 3 && styles.expiryButtonActive]}
-                  onPress={() => setExpiryHours(3)}
+                  onPress={() => {
+                    console.log('PersonalSafetyScreen: User selected 3 hours expiry');
+                    setExpiryHours(3);
+                  }}
                 >
                   <Text style={[styles.expiryButtonText, expiryHours === 3 && styles.expiryButtonTextActive]}>
                     3 Hours
@@ -375,7 +416,10 @@ export default function PersonalSafetyScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.expiryButton, expiryHours === 6 && styles.expiryButtonActive]}
-                  onPress={() => setExpiryHours(6)}
+                  onPress={() => {
+                    console.log('PersonalSafetyScreen: User selected 6 hours expiry');
+                    setExpiryHours(6);
+                  }}
                 >
                   <Text style={[styles.expiryButtonText, expiryHours === 6 && styles.expiryButtonTextActive]}>
                     6 Hours

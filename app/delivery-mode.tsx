@@ -52,16 +52,19 @@ export default function DeliveryModeScreen() {
   const [showTrafficAlert, setShowTrafficAlert] = useState(false);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
 
-  console.log('DeliveryModeScreen: Rendering');
+  console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
   useEffect(() => {
+    console.log('DeliveryModeScreen: Component mounted, getting current location...');
     getCurrentLocation();
   }, []);
 
   const getCurrentLocation = async () => {
     try {
+      console.log('DeliveryModeScreen: Requesting location permission...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
+        console.log('DeliveryModeScreen: Location permission granted, getting position...');
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.High,
         });
@@ -69,9 +72,12 @@ export default function DeliveryModeScreen() {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
         });
+        console.log('DeliveryModeScreen: Current location set:', location.coords.latitude, location.coords.longitude);
+      } else {
+        console.log('DeliveryModeScreen: Location permission denied');
       }
     } catch (error) {
-      console.error('Error getting current location:', error);
+      console.error('DeliveryModeScreen: Error getting current location:', error);
     }
   };
 
@@ -81,6 +87,7 @@ export default function DeliveryModeScreen() {
     for (let i = 0; i < 6; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    console.log('DeliveryModeScreen: Generated tracking code:', code);
     return code;
   };
 
@@ -90,7 +97,7 @@ export default function DeliveryModeScreen() {
       return;
     }
 
-    console.log('User searching for location:', searchQuery);
+    console.log('DeliveryModeScreen: User searching for location:', searchQuery);
     setSearchLoading(true);
 
     try {
@@ -98,7 +105,7 @@ export default function DeliveryModeScreen() {
       
       if (results && results.length > 0) {
         const result = results[0];
-        console.log('Search result:', result);
+        console.log('DeliveryModeScreen: Search result found:', result);
         
         setDestination({
           latitude: result.latitude,
@@ -108,10 +115,11 @@ export default function DeliveryModeScreen() {
         setTempDestinationAddress(searchQuery);
         Alert.alert('Success', 'Location found! You can adjust the pin on the map if needed.');
       } else {
+        console.log('DeliveryModeScreen: No search results found');
         Alert.alert('Not Found', 'Location not found. Please try a different search term.');
       }
     } catch (error) {
-      console.error('Error searching location:', error);
+      console.error('DeliveryModeScreen: Error searching location:', error);
       Alert.alert('Error', 'Failed to search location. Please try again.');
     } finally {
       setSearchLoading(false);
@@ -119,7 +127,7 @@ export default function DeliveryModeScreen() {
   };
 
   const handleMapPress = (latitude: number, longitude: number) => {
-    console.log('User selected location on map:', { latitude, longitude });
+    console.log('DeliveryModeScreen: User selected location on map:', { latitude, longitude });
     setDestination({
       latitude,
       longitude,
@@ -132,13 +140,14 @@ export default function DeliveryModeScreen() {
       Alert.alert('Error', 'Please select a destination on the map or search for a location');
       return;
     }
-    console.log('Destination confirmed:', destination);
+    console.log('DeliveryModeScreen: Destination confirmed:', destination);
     setDeliveryAddress(destination.address);
     setShowDestinationPicker(false);
 
     // Simulate traffic check (in production, this would call a traffic API)
     const hasTraffic = Math.random() > 0.7;
     if (hasTraffic) {
+      console.log('DeliveryModeScreen: Traffic detected on route');
       setShowTrafficAlert(true);
     }
   };
@@ -149,7 +158,7 @@ export default function DeliveryModeScreen() {
       return;
     }
 
-    console.log('Opening Google Maps for navigation to destination');
+    console.log('DeliveryModeScreen: Opening Google Maps for navigation to destination');
 
     const googleMapsUrl = Platform.select({
       ios: `comgooglemaps://?daddr=${destination.latitude},${destination.longitude}&directionsmode=driving`,
@@ -170,14 +179,14 @@ export default function DeliveryModeScreen() {
   };
 
   const handleShiftRoute = () => {
-    console.log('User requested alternative route');
+    console.log('DeliveryModeScreen: User requested alternative route');
     setShowTrafficAlert(false);
     Alert.alert('Route Updated', 'Alternative route calculated. Opening Google Maps with new route.');
     handleNavigateToDestination();
   };
 
   const startDelivery = async () => {
-    console.log('User tapped Start Delivery button');
+    console.log('DeliveryModeScreen: User tapped Start Delivery button');
     
     if (!destination) {
       Alert.alert('Error', 'Please select a destination before starting delivery');
@@ -187,22 +196,28 @@ export default function DeliveryModeScreen() {
     setLoading(true);
 
     try {
+      console.log('DeliveryModeScreen: Requesting location permission...');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('Location permission denied');
+        console.log('DeliveryModeScreen: Location permission denied');
         Alert.alert('Permission Required', 'Location permission is required for tracking');
         setLoading(false);
         return;
       }
 
+      console.log('DeliveryModeScreen: Getting current location...');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
+      console.log('DeliveryModeScreen: Current location:', location.coords.latitude, location.coords.longitude);
 
       const newTrackingCode = generateTrackingCode();
       const newOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
 
-      console.log('Creating delivery session in Supabase with destination');
+      console.log('DeliveryModeScreen: Creating delivery session in Supabase with destination');
+      console.log('DeliveryModeScreen: Order ID:', newOrderId);
+      console.log('DeliveryModeScreen: Customer Name:', customerName || 'None');
+      console.log('DeliveryModeScreen: Destination:', destination);
 
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
@@ -222,17 +237,18 @@ export default function DeliveryModeScreen() {
         .single();
 
       if (sessionError) {
-        console.error('Error creating session:', sessionError);
-        Alert.alert('Error', 'Failed to start delivery tracking');
+        console.error('DeliveryModeScreen: Error creating session:', sessionError);
+        Alert.alert('Error', 'Failed to start delivery tracking: ' + sessionError.message);
         setLoading(false);
         return;
       }
 
-      console.log('Session created:', session);
+      console.log('DeliveryModeScreen: Session created successfully:', session.id);
 
       const batteryLevel = await Battery.getBatteryLevelAsync();
       const batteryPercentage = Math.round(batteryLevel * 100);
 
+      console.log('DeliveryModeScreen: Inserting initial location...');
       const { error: locationError } = await supabase
         .from('locations')
         .insert({
@@ -245,7 +261,9 @@ export default function DeliveryModeScreen() {
         });
 
       if (locationError) {
-        console.error('Error inserting initial location:', locationError);
+        console.error('DeliveryModeScreen: Error inserting initial location:', locationError);
+      } else {
+        console.log('DeliveryModeScreen: Initial location inserted successfully');
       }
 
       setSessionId(session.id);
@@ -254,11 +272,14 @@ export default function DeliveryModeScreen() {
       setIsTracking(true);
       setDeliveryStatus('pending');
 
-      console.log('Delivery started:', { sessionId: session.id, orderId: newOrderId, trackingCode: newTrackingCode });
+      console.log('DeliveryModeScreen: Delivery started successfully!');
+      console.log('DeliveryModeScreen: Session ID:', session.id);
+      console.log('DeliveryModeScreen: Order ID:', newOrderId);
+      console.log('DeliveryModeScreen: Tracking Code:', newTrackingCode);
 
       startLocationUpdates(session.id);
     } catch (error) {
-      console.error('Error starting delivery:', error);
+      console.error('DeliveryModeScreen: Exception starting delivery:', error);
       Alert.alert('Error', 'Failed to start delivery tracking');
     } finally {
       setLoading(false);
@@ -266,7 +287,7 @@ export default function DeliveryModeScreen() {
   };
 
   const startLocationUpdates = (sessionId: string) => {
-    console.log('Starting location updates every 5 seconds');
+    console.log('DeliveryModeScreen: Starting location updates every 5 seconds for session:', sessionId);
     
     locationInterval.current = setInterval(async () => {
       try {
@@ -278,7 +299,7 @@ export default function DeliveryModeScreen() {
         const batteryLevel = await Battery.getBatteryLevelAsync();
         const batteryPercentage = Math.round(batteryLevel * 100);
 
-        console.log('Location update:', {
+        console.log('DeliveryModeScreen: Location update:', {
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
           speed: speedKmh,
@@ -297,10 +318,12 @@ export default function DeliveryModeScreen() {
           });
 
         if (error) {
-          console.error('Error updating location:', error);
+          console.error('DeliveryModeScreen: Error updating location:', error);
+        } else {
+          console.log('DeliveryModeScreen: Location updated successfully');
         }
       } catch (error) {
-        console.error('Error updating location:', error);
+        console.error('DeliveryModeScreen: Exception updating location:', error);
       }
     }, 5000);
   };
@@ -308,7 +331,7 @@ export default function DeliveryModeScreen() {
   const updateDeliveryStatus = async (newStatus: DeliveryStatus) => {
     if (!sessionId) return;
 
-    console.log('User updated delivery status to:', newStatus);
+    console.log('DeliveryModeScreen: User updated delivery status to:', newStatus);
     setDeliveryStatus(newStatus);
 
     try {
@@ -321,12 +344,13 @@ export default function DeliveryModeScreen() {
         .eq('id', sessionId);
 
       if (error) {
-        console.error('Error updating delivery status:', error);
+        console.error('DeliveryModeScreen: Error updating delivery status:', error);
       } else {
-        console.log('Delivery status updated successfully');
+        console.log('DeliveryModeScreen: Delivery status updated successfully');
       }
 
       if (newStatus === 'delivered') {
+        console.log('DeliveryModeScreen: Delivery marked as delivered, stopping location updates...');
         if (locationInterval.current) {
           clearInterval(locationInterval.current);
           locationInterval.current = null;
@@ -340,23 +364,25 @@ export default function DeliveryModeScreen() {
           })
           .eq('id', sessionId);
 
-        console.log('Delivery completed, tracking stopped');
+        console.log('DeliveryModeScreen: Delivery completed, tracking stopped');
       }
     } catch (error) {
-      console.error('Error updating delivery status:', error);
+      console.error('DeliveryModeScreen: Exception updating delivery status:', error);
     }
   };
 
   const stopDelivery = async () => {
-    console.log('User tapped Stop Delivery button');
+    console.log('DeliveryModeScreen: User tapped Stop Delivery button');
     
     if (locationInterval.current) {
       clearInterval(locationInterval.current);
       locationInterval.current = null;
+      console.log('DeliveryModeScreen: Location updates stopped');
     }
 
     if (sessionId) {
       try {
+        console.log('DeliveryModeScreen: Marking session as stopped in database...');
         await supabase
           .from('tracking_sessions')
           .update({
@@ -365,9 +391,9 @@ export default function DeliveryModeScreen() {
           })
           .eq('id', sessionId);
         
-        console.log('Session marked as stopped in database');
+        console.log('DeliveryModeScreen: Session marked as stopped successfully');
       } catch (error) {
-        console.error('Error stopping session:', error);
+        console.error('DeliveryModeScreen: Error stopping session:', error);
       }
     }
 
@@ -380,13 +406,13 @@ export default function DeliveryModeScreen() {
     setDeliveryAddress('');
     setDestination(null);
     setShowTrafficAlert(false);
-    console.log('Delivery tracking stopped');
+    console.log('DeliveryModeScreen: Delivery tracking stopped, state reset');
   };
 
   const shareTrackingLink = async () => {
     if (!trackingCode) return;
     
-    console.log('User tapped Share button, opening share modal');
+    console.log('DeliveryModeScreen: User tapped Share button, opening share modal');
     setShowShareModal(true);
   };
 
@@ -397,7 +423,7 @@ export default function DeliveryModeScreen() {
     const orderText = orderId ? `Order ${orderId}` : 'Your delivery';
     const message = `Track ${orderText}: ${trackingUrl}`;
 
-    console.log(`User sharing via ${method}:`, trackingUrl);
+    console.log(`DeliveryModeScreen: User sharing via ${method}:`, trackingUrl);
 
     try {
       if (method === 'whatsapp') {
@@ -405,7 +431,9 @@ export default function DeliveryModeScreen() {
         const canOpen = await Linking.canOpenURL(whatsappUrl);
         if (canOpen) {
           await Linking.openURL(whatsappUrl);
+          console.log('DeliveryModeScreen: WhatsApp opened successfully');
         } else {
+          console.log('DeliveryModeScreen: WhatsApp not installed');
           Alert.alert('Error', 'WhatsApp is not installed on this device');
         }
       } else if (method === 'messenger') {
@@ -413,7 +441,9 @@ export default function DeliveryModeScreen() {
         const canOpen = await Linking.canOpenURL(messengerUrl);
         if (canOpen) {
           await Linking.openURL(messengerUrl);
+          console.log('DeliveryModeScreen: Messenger opened successfully');
         } else {
+          console.log('DeliveryModeScreen: Messenger not installed');
           Alert.alert('Error', 'Messenger is not installed on this device');
         }
       } else {
@@ -421,10 +451,11 @@ export default function DeliveryModeScreen() {
           message: message,
           url: trackingUrl,
         });
+        console.log('DeliveryModeScreen: Share sheet opened successfully');
       }
       setShowShareModal(false);
     } catch (error) {
-      console.error('Error sharing:', error);
+      console.error('DeliveryModeScreen: Error sharing:', error);
       Alert.alert('Error', 'Failed to share tracking link');
     }
   };
@@ -458,6 +489,8 @@ export default function DeliveryModeScreen() {
   const statusText = getStatusText(deliveryStatus);
   const statusColor = getStatusColor(deliveryStatus);
 
+  console.log('DeliveryModeScreen: Rendering UI, destination:', destination ? 'Set' : 'Not set');
+
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
@@ -485,7 +518,10 @@ export default function DeliveryModeScreen() {
                   placeholder="Enter customer name"
                   placeholderTextColor={colors.textTertiary}
                   value={customerName}
-                  onChangeText={setCustomerName}
+                  onChangeText={(text) => {
+                    console.log('DeliveryModeScreen: Customer name changed:', text);
+                    setCustomerName(text);
+                  }}
                 />
               </View>
 
@@ -493,7 +529,10 @@ export default function DeliveryModeScreen() {
                 <Text style={styles.inputLabel}>Destination (Required)</Text>
                 <TouchableOpacity
                   style={styles.destinationButton}
-                  onPress={() => setShowDestinationPicker(true)}
+                  onPress={() => {
+                    console.log('DeliveryModeScreen: User tapped destination picker button');
+                    setShowDestinationPicker(true);
+                  }}
                 >
                   <IconSymbol
                     ios_icon_name="location.fill"
@@ -744,7 +783,10 @@ export default function DeliveryModeScreen() {
         visible={showDestinationPicker}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowDestinationPicker(false)}
+        onRequestClose={() => {
+          console.log('DeliveryModeScreen: User closed destination picker modal');
+          setShowDestinationPicker(false);
+        }}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top']}>
           <View style={styles.modalHeader}>
@@ -851,7 +893,10 @@ export default function DeliveryModeScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         transparent={false}
-        onRequestClose={() => setShowShareModal(false)}
+        onRequestClose={() => {
+          console.log('DeliveryModeScreen: User closed share modal');
+          setShowShareModal(false);
+        }}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top']}>
           <View style={styles.modalHeader}>
