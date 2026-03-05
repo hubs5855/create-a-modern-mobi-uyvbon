@@ -16,6 +16,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { loadLanguage } from "@/utils/i18n";
 // Note: Error logging is auto-initialized via index.ts import
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -33,9 +34,21 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
+    // Initialize i18n on app start
+    const initializeApp = async () => {
+      console.log('RootLayout: Initializing app...');
+      
+      // Load saved language preference
+      await loadLanguage();
+      console.log('RootLayout: Language loaded');
+      
+      if (loaded) {
+        await SplashScreen.hideAsync();
+        console.log('RootLayout: Splash screen hidden');
+      }
+    };
+    
+    initializeApp();
   }, [loaded]);
 
   React.useEffect(() => {

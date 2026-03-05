@@ -71,11 +71,15 @@ export const commonStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 8,
+    // CRITICAL: Use default system font for Unicode support (Sinhala/Tamil)
+    // Do NOT specify fontFamily - let the system handle it
   },
   subtitle: {
     fontSize: 16,
     color: colors.textSecondary,
     marginBottom: 24,
+    // CRITICAL: Use default system font for Unicode support (Sinhala/Tamil)
+    // Do NOT specify fontFamily - let the system handle it
   },
   button: {
     backgroundColor: colors.primary,
@@ -88,6 +92,8 @@ export const commonStyles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: '600',
+    // CRITICAL: Use default system font for Unicode support (Sinhala/Tamil)
+    // Do NOT specify fontFamily - let the system handle it
   },
   accentButton: {
     backgroundColor: colors.accent,
@@ -100,5 +106,7 @@ export const commonStyles = StyleSheet.create({
     color: colors.background,
     fontSize: 16,
     fontWeight: '700',
+    // CRITICAL: Use default system font for Unicode support (Sinhala/Tamil)
+    // Do NOT specify fontFamily - let the system handle it
   },
 });

@@ -326,37 +326,75 @@ const translations = {
   },
 };
 
+// Initialize i18n with proper configuration for Unicode support
 const i18n = new I18n(translations);
+
+// CRITICAL: Enable fallback to English if translation is missing
+i18n.enableFallback = true;
 i18n.defaultLocale = 'en';
 i18n.locale = 'en';
-i18n.enableFallback = true;
+
+// Configure i18n to handle missing translations gracefully
+i18n.missingBehavior = 'guess';
 
 export const LANGUAGE_STORAGE_KEY = '@trackme_language';
 
+// Load saved language from AsyncStorage
 export const loadLanguage = async () => {
   try {
     const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
-    if (savedLanguage) {
+    if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'si' || savedLanguage === 'ta')) {
       i18n.locale = savedLanguage;
-      console.log('Loaded language:', savedLanguage);
+      console.log('i18n: Loaded saved language:', savedLanguage);
+    } else {
+      console.log('i18n: No saved language found, using default (en)');
     }
   } catch (error) {
-    console.error('Error loading language:', error);
+    console.error('i18n: Error loading language from storage:', error);
   }
 };
 
+// Save language preference to AsyncStorage
 export const saveLanguage = async (language: string) => {
   try {
+    if (language !== 'en' && language !== 'si' && language !== 'ta') {
+      console.error('i18n: Invalid language code:', language);
+      return;
+    }
     await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     i18n.locale = language;
-    console.log('Saved language:', language);
+    console.log('i18n: Saved and set language to:', language);
   } catch (error) {
-    console.error('Error saving language:', error);
+    console.error('i18n: Error saving language to storage:', error);
   }
 };
 
-export const getCurrentLanguage = () => i18n.locale;
+// Get current language
+export const getCurrentLanguage = () => {
+  return i18n.locale;
+};
 
-export const t = (key: string, options?: any) => i18n.t(key, options);
+// Translation function with fallback support
+export const t = (key: string, options?: any): string => {
+  try {
+    const translation = i18n.t(key, options);
+    
+    // If translation returns the key itself (meaning it's missing), fallback to English
+    if (translation === key && i18n.locale !== 'en') {
+      console.warn(`i18n: Missing translation for key "${key}" in locale "${i18n.locale}", falling back to English`);
+      const fallbackLocale = i18n.locale;
+      i18n.locale = 'en';
+      const englishTranslation = i18n.t(key, options);
+      i18n.locale = fallbackLocale;
+      return englishTranslation;
+    }
+    
+    return translation;
+  } catch (error) {
+    console.error('i18n: Error translating key:', key, error);
+    // Return the key itself as last resort
+    return key;
+  }
+};
 
 export default i18n;
