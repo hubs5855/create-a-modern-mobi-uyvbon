@@ -3,15 +3,11 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Database } from './types';
+import type { Database } from '@/types/supabase';
 
-// Log environment variable status for debugging
-console.log('🔧 Supabase Client Initialization');
-console.log('SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL ? 'Present ✅' : 'Missing ❌');
-console.log('SUPABASE_PUBLISHABLE_KEY:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'Present ✅' : 'Missing ❌');
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// Supabase project credentials
+const SUPABASE_URL = 'https://dnweopctkrhuuepfadij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRud2VvcGN0a3JodXVlcGZhZGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MzI2OTIsImV4cCI6MjA4ODEwODY5Mn0.rN0NviHd3Xm6kGtYvxyEUuhJVrP7600Q0CrMvvIYI4g';
 
 // In-memory storage fallback for when AsyncStorage is unavailable
 class InMemoryStorage {
@@ -81,52 +77,21 @@ function createSupabaseStorage() {
   }
 }
 
-// Validate environment variables and create client
-let supabaseClient;
+// Create Supabase client with proper configuration
+const supabaseClient = createClient<Database>(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      storage: createSupabaseStorage(),
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  }
+);
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error('❌ CRITICAL ERROR: Supabase environment variables are missing!');
-  console.error('Please ensure .env file exists with:');
-  console.error({
-    EXPO_PUBLIC_SUPABASE_URL: 'https://your-project.supabase.co',
-    EXPO_PUBLIC_SUPABASE_ANON_KEY: 'your-anon-key'
-  });
-  
-  // Create a dummy client that will fail gracefully
-  const dummyStorage = new InMemoryStorage();
-  supabaseClient = createClient<Database>(
-    'https://placeholder.supabase.co',
-    'placeholder-key',
-    {
-      auth: {
-        storage: dummyStorage,
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    }
-  );
-  
-  // Log error but don't throw immediately to prevent React state update warning
-  console.error('⚠️ Supabase client created with placeholder values. App functionality will be limited.');
-} else {
-  // Create Supabase client with proper configuration
-  supabaseClient = createClient<Database>(
-    SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY,
-    {
-      auth: {
-        storage: createSupabaseStorage(),
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: false,
-      },
-    }
-  );
-  
-  console.log('✅ Supabase client initialized successfully');
-  console.log('📍 Project URL:', SUPABASE_URL);
-}
+console.log('✅ Supabase client initialized successfully');
 
 export const supabase = supabaseClient;
 export default supabase;
