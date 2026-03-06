@@ -41,6 +41,36 @@ interface TrackingData {
   }[];
 }
 
+// Helper function to calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Helper function to calculate ETA
+function calculateETA(distance: number, averageSpeed: number): string {
+  if (averageSpeed <= 0) {
+    return 'N/A';
+  }
+  const hours = distance / averageSpeed;
+  const minutes = Math.round(hours * 60);
+  
+  if (minutes < 60) {
+    return `${minutes} min`;
+  } else {
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hrs}h ${mins}m`;
+  }
+}
+
 export default function PublicTrackingScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
@@ -130,13 +160,60 @@ export default function PublicTrackingScreen() {
   useEffect(() => {
     fetchTrackingData();
     
-    // Auto-refresh every 5 seconds
+    // Set up Supabase Realtime subscription for live updates
+    let channel: any = null;
+    
+    const setupRealtimeSubscription = async () => {
+      try {
+        // First get the session ID from the tracking code
+        const { data: session } = await supabase
+          .from('tracking_sessions')
+          .select('id')
+          .eq('tracking_code', code)
+          .single();
+
+        if (session) {
+          console.log('PublicTrackingScreen: Setting up realtime subscription for session:', session.id);
+          
+          // Subscribe to location updates for this session
+          channel = supabase
+            .channel(`locations:session_id=eq.${session.id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'locations',
+                filter: `session_id=eq.${session.id}`,
+              },
+              (payload) => {
+                console.log('PublicTrackingScreen: New location received via realtime:', payload.new);
+                // Refresh data when new location is inserted
+                fetchTrackingData(true);
+              }
+            )
+            .subscribe();
+        }
+      } catch (error) {
+        console.error('PublicTrackingScreen: Error setting up realtime subscription:', error);
+      }
+    };
+
+    setupRealtimeSubscription();
+
+    // Fallback: Auto-refresh every 10 seconds (less frequent since we have realtime)
     const interval = setInterval(() => {
       fetchTrackingData(true);
-    }, 5000);
+    }, 10000);
 
-    return () => clearInterval(interval);
-  }, [fetchTrackingData]);
+    return () => {
+      clearInterval(interval);
+      if (channel) {
+        console.log('PublicTrackingScreen: Unsubscribing from realtime channel');
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [fetchTrackingData, code]);
 
   // Real-time countdown timer - updates every second
   useEffect(() => {
@@ -255,14 +332,49 @@ export default function PublicTrackingScreen() {
     : 'N/A';
   const countdownText = formatCountdown(timeRemaining);
 
-  // Prepare map markers
+  // Calculate distance and ETA
+  let distanceText = 'N/A';
+  let etaText = 'N/A';
+  if (trackingData?.lastLocation && trackingData?.destinationLatitude && trackingData?.destinationLongitude) {
+    const distance = calculateDistance(
+      trackingData.lastLocation.latitude,
+      trackingData.lastLocation.longitude,
+      trackingData.destinationLatitude,
+      trackingData.destinationLongitude
+    );
+    distanceText = `${distance.toFixed(1)} km`;
+    
+    // Calculate average speed from recent locations
+    const recentLocations = trackingData.locationHistory.slice(0, 10);
+    const speeds = recentLocations
+      .map((_, idx) => {
+        if (idx === recentLocations.length - 1) return null;
+        const loc1 = recentLocations[idx];
+        const loc2 = recentLocations[idx + 1];
+        const dist = calculateDistance(loc1.latitude, loc1.longitude, loc2.latitude, loc2.longitude);
+        const time1 = new Date(loc1.timestamp).getTime();
+        const time2 = new Date(loc2.timestamp).getTime();
+        const timeDiff = Math.abs(time1 - time2) / 1000 / 3600; // hours
+        return timeDiff > 0 ? dist / timeDiff : 0;
+      })
+      .filter(s => s !== null && s > 0) as number[];
+    
+    const averageSpeed = speeds.length > 0 
+      ? speeds.reduce((a, b) => a + b, 0) / speeds.length 
+      : trackingData.lastLocation.speed || 30; // Default to 30 km/h if no speed data
+    
+    etaText = calculateETA(distance, averageSpeed);
+  }
+
+  // Prepare map markers with types
   const mapMarkers = [];
   if (trackingData?.lastLocation) {
     mapMarkers.push({
-      id: 'current',
+      id: 'driver',
       latitude: trackingData.lastLocation.latitude,
       longitude: trackingData.lastLocation.longitude,
-      title: t('current_location'),
+      title: trackingData.sessionType === 'delivery' ? t('driver_location') : t('current_location'),
+      type: 'driver' as const,
     });
   }
   if (trackingData?.destinationLatitude && trackingData?.destinationLongitude) {
@@ -271,8 +383,15 @@ export default function PublicTrackingScreen() {
       latitude: trackingData.destinationLatitude,
       longitude: trackingData.destinationLongitude,
       title: t('destination'),
+      type: 'destination' as const,
     });
   }
+
+  // Prepare route coordinates (last 50 locations)
+  const routeCoordinates = trackingData?.locationHistory.slice(0, 50).reverse().map(loc => ({
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+  })) || [];
 
   const sessionTypeText = trackingData?.sessionType === 'personal_safety' 
     ? t('personal_safety_type') 
@@ -320,6 +439,7 @@ export default function PublicTrackingScreen() {
             <View style={styles.mapContainer}>
               <Map
                 markers={mapMarkers}
+                routeCoordinates={routeCoordinates}
                 initialRegion={{
                   latitude: trackingData.lastLocation?.latitude || mapMarkers[0].latitude,
                   longitude: trackingData.lastLocation?.longitude || mapMarkers[0].longitude,
@@ -327,6 +447,7 @@ export default function PublicTrackingScreen() {
                   longitudeDelta: 0.05,
                 }}
                 style={styles.map}
+                centerOnMarkers={true}
               />
             </View>
           )}
@@ -450,6 +571,35 @@ export default function PublicTrackingScreen() {
                   />
                   <Text style={styles.statLabel}>{t('battery')}</Text>
                   <Text style={styles.statValue}>{batteryText}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Distance and ETA */}
+          {trackingData?.destinationLatitude && trackingData?.destinationLongitude && trackingData?.lastLocation && (
+            <View style={styles.etaCard}>
+              <Text style={styles.etaTitle}>Delivery Information</Text>
+              <View style={styles.etaGrid}>
+                <View style={styles.etaItem}>
+                  <IconSymbol
+                    ios_icon_name="arrow.right.circle.fill"
+                    android_material_icon_name="navigation"
+                    size={24}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.etaLabel}>Distance</Text>
+                  <Text style={styles.etaValue}>{distanceText}</Text>
+                </View>
+                <View style={styles.etaItem}>
+                  <IconSymbol
+                    ios_icon_name="clock.fill"
+                    android_material_icon_name="schedule"
+                    size={24}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.etaLabel}>ETA</Text>
+                  <Text style={styles.etaValue}>{etaText}</Text>
                 </View>
               </View>
             </View>
@@ -620,5 +770,40 @@ const styles = StyleSheet.create({
   historyText: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+  etaCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  etaTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  etaGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  etaItem: {
+    flex: 1,
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  etaLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  etaValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
   },
 });

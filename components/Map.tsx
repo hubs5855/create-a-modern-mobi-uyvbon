@@ -9,10 +9,17 @@ export interface MapMarker {
   longitude: number;
   title?: string;
   description?: string;
+  type?: 'driver' | 'customer' | 'destination' | 'default';
+}
+
+export interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
 }
 
 interface MapProps {
   markers?: MapMarker[];
+  routeCoordinates?: RouteCoordinate[];
   initialRegion?: {
     latitude: number;
     longitude: number;
@@ -22,10 +29,12 @@ interface MapProps {
   style?: ViewStyle;
   showsUserLocation?: boolean;
   onMapPress?: (latitude: number, longitude: number) => void;
+  centerOnMarkers?: boolean;
 }
 
 export function Map({
   markers = [],
+  routeCoordinates = [],
   initialRegion = {
     latitude: 37.78825,
     longitude: -122.4324,
@@ -35,9 +44,11 @@ export function Map({
   style,
   showsUserLocation = false,
   onMapPress,
+  centerOnMarkers = true,
 }: MapProps) {
   const htmlContent = useMemo(() => {
     const markersJson = JSON.stringify(markers);
+    const routeJson = JSON.stringify(routeCoordinates);
     const initialRegionJson = JSON.stringify(initialRegion);
     const hasOnMapPress = !!onMapPress;
 
@@ -59,14 +70,27 @@ export function Map({
               height: 100%;
               width: 100%;
             }
+            .driver-icon {
+              font-size: 32px;
+              text-align: center;
+              line-height: 1;
+              transition: all 0.5s ease-in-out;
+            }
+            .customer-icon {
+              font-size: 28px;
+              text-align: center;
+              line-height: 1;
+            }
           </style>
         </head>
         <body>
           <div id="map"></div>
           <script>
             const markers = ${markersJson};
+            const routeCoordinates = ${routeJson};
             const initialRegion = ${initialRegionJson};
             const hasOnMapPress = ${hasOnMapPress};
+            const centerOnMarkers = ${centerOnMarkers};
 
             const map = L.map('map', {
               zoomControl: true,
@@ -77,13 +101,62 @@ export function Map({
               maxZoom: 19,
             }).addTo(map);
 
-            // Add markers
+            // Custom icons
+            const driverIcon = L.divIcon({
+              html: '<div class="driver-icon">🚗</div>',
+              className: '',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
+            });
+
+            const customerIcon = L.divIcon({
+              html: '<div class="customer-icon">📍</div>',
+              className: '',
+              iconSize: [36, 36],
+              iconAnchor: [18, 36],
+            });
+
+            const destinationIcon = L.divIcon({
+              html: '<div class="customer-icon">🎯</div>',
+              className: '',
+              iconSize: [36, 36],
+              iconAnchor: [18, 36],
+            });
+
+            // Store marker references for smooth animation
+            const markerRefs = {};
+
+            // Add markers with custom icons
             markers.forEach(marker => {
-              const leafletMarker = L.marker([marker.latitude, marker.longitude]).addTo(map);
+              let icon = null;
+              if (marker.type === 'driver') {
+                icon = driverIcon;
+              } else if (marker.type === 'customer') {
+                icon = customerIcon;
+              } else if (marker.type === 'destination') {
+                icon = destinationIcon;
+              }
+
+              const leafletMarker = L.marker([marker.latitude, marker.longitude], icon ? { icon } : {}).addTo(map);
+              
               if (marker.title) {
                 leafletMarker.bindPopup(marker.title);
               }
+
+              // Store reference for animation
+              markerRefs[marker.id] = leafletMarker;
             });
+
+            // Draw route polyline if coordinates provided
+            if (routeCoordinates && routeCoordinates.length > 1) {
+              const routeLatLngs = routeCoordinates.map(coord => [coord.latitude, coord.longitude]);
+              L.polyline(routeLatLngs, {
+                color: '#4A90E2',
+                weight: 4,
+                opacity: 0.7,
+                smoothFactor: 1,
+              }).addTo(map);
+            }
 
             // Handle map clicks if onMapPress is provided
             if (hasOnMapPress) {
@@ -98,16 +171,41 @@ export function Map({
               });
             }
 
-            // Fit bounds if there are markers
-            if (markers.length > 0) {
-              const bounds = L.latLngBounds(markers.map(m => [m.latitude, m.longitude]));
-              map.fitBounds(bounds, { padding: [50, 50] });
+            // Fit bounds if there are markers or route
+            if (centerOnMarkers) {
+              const allPoints = [];
+              markers.forEach(m => allPoints.push([m.latitude, m.longitude]));
+              routeCoordinates.forEach(c => allPoints.push([c.latitude, c.longitude]));
+              
+              if (allPoints.length > 0) {
+                const bounds = L.latLngBounds(allPoints);
+                map.fitBounds(bounds, { padding: [50, 50] });
+              }
             }
+
+            // Listen for marker updates for smooth animation
+            window.addEventListener('message', function(event) {
+              try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'updateMarker' && markerRefs[data.id]) {
+                  const marker = markerRefs[data.id];
+                  const newLatLng = L.latLng(data.latitude, data.longitude);
+                  marker.setLatLng(newLatLng);
+                  
+                  // Optionally pan to new location
+                  if (data.panTo) {
+                    map.panTo(newLatLng);
+                  }
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            });
           </script>
         </body>
       </html>
     `;
-  }, [markers, initialRegion, onMapPress]);
+  }, [markers, routeCoordinates, initialRegion, onMapPress, centerOnMarkers]);
 
   const handleMessage = (event: any) => {
     if (!onMapPress) return;
