@@ -53,7 +53,6 @@ export type Database = {
           destination_latitude: number | null
           destination_longitude: number | null
           destination_address: string | null
-          countdown_timer: string | null
         }
         Insert: {
           id?: string
@@ -71,7 +70,6 @@ export type Database = {
           destination_latitude?: number | null
           destination_longitude?: number | null
           destination_address?: string | null
-          countdown_timer?: string | null
         }
         Update: {
           id?: string
@@ -89,7 +87,6 @@ export type Database = {
           destination_latitude?: number | null
           destination_longitude?: number | null
           destination_address?: string | null
-          countdown_timer?: string | null
         }
       }
       locations: {
