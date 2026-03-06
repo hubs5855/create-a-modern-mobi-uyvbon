@@ -62,7 +62,7 @@ export default function PersonalSafetyScreen() {
     fetchFavorites();
   }, []);
 
-  // Real-time countdown timer
+  // Real-time countdown timer - updates every second
   useEffect(() => {
     if (!expiresAt) {
       console.log('PersonalSafetyScreen: No expiry time, clearing countdown');
@@ -81,6 +81,7 @@ export default function PersonalSafetyScreen() {
       const now = Date.now();
       const remaining = Math.max(0, expiryTime - now);
       
+      console.log('PersonalSafetyScreen: Time remaining (ms):', remaining);
       setTimeRemaining(remaining);
 
       if (remaining <= 0) {
@@ -100,6 +101,7 @@ export default function PersonalSafetyScreen() {
 
     // Cleanup on unmount or when expiresAt changes
     return () => {
+      console.log('PersonalSafetyScreen: Cleaning up countdown timer');
       if (countdownInterval.current) {
         clearInterval(countdownInterval.current);
         countdownInterval.current = null;
@@ -217,6 +219,7 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Tracking started successfully!');
       console.log('PersonalSafetyScreen: Session ID:', session.id);
       console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
+      console.log('PersonalSafetyScreen: Expires At:', expiryTime.toISOString());
 
       startLocationUpdates(session.id);
     } catch (error) {
