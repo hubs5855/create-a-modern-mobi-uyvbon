@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Map } from '@/components/Map';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { Stack, useLocalSearchParams } from 'expo-router';
@@ -47,7 +47,8 @@ export default function PublicTrackingScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   console.log('PublicTrackingScreen: Tracking code:', code);
 
@@ -62,35 +63,49 @@ export default function PublicTrackingScreen() {
     return () => clearInterval(interval);
   }, [code]);
 
-  // Update countdown timer every second
+  // Real-time countdown timer - updates every second
   useEffect(() => {
-    if (!trackingData?.expiresAt) return;
+    if (!trackingData?.expiresAt) {
+      console.log('PublicTrackingScreen: No expiry time, clearing countdown');
+      setTimeRemaining(null);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      return;
+    }
 
-    const updateCountdown = () => {
+    console.log('PublicTrackingScreen: Starting countdown timer for expiry:', trackingData.expiresAt);
+
+    const calculateTimeRemaining = () => {
       const expiryTime = new Date(trackingData.expiresAt!).getTime();
       const now = Date.now();
-      const diff = expiryTime - now;
-
-      if (diff <= 0) {
-        setTimeRemaining(t('expired'));
-        return;
-      }
-
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      const hoursText = `${hours}h`;
-      const minutesText = `${minutes}m`;
-      const secondsText = `${seconds}s`;
+      const remaining = Math.max(0, expiryTime - now);
       
-      setTimeRemaining(`${hoursText} ${minutesText} ${secondsText}`);
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('PublicTrackingScreen: Timer expired, stopping countdown');
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+      }
     };
 
-    updateCountdown();
-    const countdownInterval = setInterval(updateCountdown, 1000);
+    // Calculate immediately
+    calculateTimeRemaining();
 
-    return () => clearInterval(countdownInterval);
+    // Then update every second
+    countdownIntervalRef.current = setInterval(calculateTimeRemaining, 1000);
+
+    // Cleanup on unmount or when expiresAt changes
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
   }, [trackingData?.expiresAt]);
 
   const fetchTrackingData = async (silent = false) => {
@@ -193,6 +208,21 @@ export default function PublicTrackingScreen() {
     }
   };
 
+  const formatCountdown = (ms: number | null): string => {
+    if (ms === null || ms <= 0) {
+      return t('expired');
+    }
+
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (num: number) => num.toString().padStart(2, '0');
+
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -223,6 +253,7 @@ export default function PublicTrackingScreen() {
   const batteryText = trackingData?.lastLocation?.batteryLevel 
     ? `${trackingData.lastLocation.batteryLevel}%`
     : 'N/A';
+  const countdownText = formatCountdown(timeRemaining);
 
   // Prepare map markers
   const mapMarkers = [];
@@ -330,10 +361,15 @@ export default function PublicTrackingScreen() {
                   ios_icon_name="clock.fill"
                   android_material_icon_name="schedule"
                   size={20}
-                  color={colors.accent}
+                  color={timeRemaining && timeRemaining > 0 ? colors.accent : colors.danger}
                 />
                 <Text style={styles.infoLabel}>{t('time_remaining')}</Text>
-                <Text style={styles.infoValue}>{timeRemaining}</Text>
+                <Text style={[
+                  styles.infoValue,
+                  timeRemaining && timeRemaining <= 0 && { color: colors.danger }
+                ]}>
+                  {countdownText}
+                </Text>
               </View>
             )}
 
