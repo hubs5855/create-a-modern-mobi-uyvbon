@@ -7,7 +7,14 @@ import type { Database } from './types';
 
 // Log environment variable status for debugging
 ;
+import 'react-native-url-polyfill/auto';
+import { createClient } from '@supabase/supabase-js';
 
+// ඔබේ Supabase Dashboard එකෙන් ගත් සැබෑ දත්ත මෙහි " " ඇතුළත කෙලින්ම ලියන්න
+const SUPABASE_URL = "https://your-project-url.supabase.co"; 
+const SUPABASE_PUBLISHABLE_KEY = "your-anon-key-here";
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 // In-memory storage fallback for when AsyncStorage is unavailable
 class InMemoryStorage {
   private data: { [key: string]: string } = {};
