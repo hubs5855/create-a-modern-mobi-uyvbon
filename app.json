@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "create-a-modern-mobi",
-    "slug": "create-a-modern-mobi",
+    "name": "Trackmelk",
+    "slug": "trackmelk",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-ouc.png",
@@ -36,7 +36,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "createamodernmobi",
+    "scheme": "trackmelk",
     "experiments": {
       "typedRoutes": true
     },
