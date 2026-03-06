@@ -24,14 +24,17 @@ class InMemoryStorage {
   private data: { [key: string]: string } = {};
 
   async getItem(key: string): Promise<string | null> {
+    console.log('InMemoryStorage: getItem', key);
     return this.data[key] || null;
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    console.log('InMemoryStorage: setItem', key);
     this.data[key] = value;
   }
 
   async removeItem(key: string): Promise<void> {
+    console.log('InMemoryStorage: removeItem', key);
     delete this.data[key];
   }
 }
@@ -48,14 +51,56 @@ try {
       removeItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
     };
     console.log('✅ Supabase: Using localStorage for web');
-  } else if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
-    // Use AsyncStorage for native if available and functional
-    storageAdapter = AsyncStorage;
-    console.log('✅ Supabase: Using AsyncStorage for native');
   } else {
-    // Fallback to in-memory storage if AsyncStorage is null or not functional
-    console.warn('⚠️ AsyncStorage is null or not functional, falling back to in-memory storage for Supabase client. Sessions will not persist across app restarts.');
-    storageAdapter = new InMemoryStorage();
+    // For native platforms, test AsyncStorage before using it
+    const testAsyncStorage = async () => {
+      try {
+        if (!AsyncStorage) {
+          throw new Error('AsyncStorage is null');
+        }
+        // Test if AsyncStorage is functional
+        await AsyncStorage.setItem('__test__', 'test');
+        await AsyncStorage.removeItem('__test__');
+        return true;
+      } catch (error) {
+        console.warn('AsyncStorage test failed:', error);
+        return false;
+      }
+    };
+
+    // Use a synchronous check first
+    if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
+      // Wrap AsyncStorage with error handling
+      storageAdapter = {
+        getItem: async (key: string) => {
+          try {
+            return await AsyncStorage.getItem(key);
+          } catch (error) {
+            console.warn('AsyncStorage getItem error:', error);
+            return null;
+          }
+        },
+        setItem: async (key: string, value: string) => {
+          try {
+            await AsyncStorage.setItem(key, value);
+          } catch (error) {
+            console.warn('AsyncStorage setItem error:', error);
+          }
+        },
+        removeItem: async (key: string) => {
+          try {
+            await AsyncStorage.removeItem(key);
+          } catch (error) {
+            console.warn('AsyncStorage removeItem error:', error);
+          }
+        },
+      };
+      console.log('✅ Supabase: Using AsyncStorage for native (with error handling)');
+    } else {
+      // Fallback to in-memory storage if AsyncStorage is null or not functional
+      console.warn('⚠️ AsyncStorage is null or not functional, falling back to in-memory storage for Supabase client. Sessions will not persist across app restarts.');
+      storageAdapter = new InMemoryStorage();
+    }
   }
 } catch (error) {
   // If any error occurs during storage detection, use in-memory storage
