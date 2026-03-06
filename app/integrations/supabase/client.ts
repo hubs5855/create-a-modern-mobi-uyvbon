@@ -6,12 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Database } from './types';
 
 // Log environment variable status for debugging
-console.log('🔧 Supabase Client Initialization');
-console.log('SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL ? 'Present ✅' : 'Missing ❌');
-console.log('SUPABASE_PUBLISHABLE_KEY:', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'Present ✅' : 'Missing ❌');
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+;
 
 // In-memory storage fallback for when AsyncStorage is unavailable
 class InMemoryStorage {
