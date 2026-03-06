@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map } from '@/components/Map';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { Stack, useLocalSearchParams } from 'expo-router';
@@ -34,11 +34,11 @@ interface TrackingData {
     batteryLevel?: number;
     timestamp: string;
   };
-  locationHistory: Array<{
+  locationHistory: {
     latitude: number;
     longitude: number;
     timestamp: string;
-  }>;
+  }[];
 }
 
 export default function PublicTrackingScreen() {
@@ -52,63 +52,7 @@ export default function PublicTrackingScreen() {
 
   console.log('PublicTrackingScreen: Tracking code:', code);
 
-  useEffect(() => {
-    fetchTrackingData();
-    
-    // Auto-refresh every 5 seconds
-    const interval = setInterval(() => {
-      fetchTrackingData(true);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [code]);
-
-  // Real-time countdown timer - updates every second
-  useEffect(() => {
-    if (!trackingData?.expiresAt) {
-      console.log('PublicTrackingScreen: No expiry time, clearing countdown');
-      setTimeRemaining(null);
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-      return;
-    }
-
-    console.log('PublicTrackingScreen: Starting countdown timer for expiry:', trackingData.expiresAt);
-
-    const calculateTimeRemaining = () => {
-      const expiryTime = new Date(trackingData.expiresAt!).getTime();
-      const now = Date.now();
-      const remaining = Math.max(0, expiryTime - now);
-      
-      setTimeRemaining(remaining);
-
-      if (remaining <= 0) {
-        console.log('PublicTrackingScreen: Timer expired, stopping countdown');
-        if (countdownIntervalRef.current) {
-          clearInterval(countdownIntervalRef.current);
-          countdownIntervalRef.current = null;
-        }
-      }
-    };
-
-    // Calculate immediately
-    calculateTimeRemaining();
-
-    // Then update every second
-    countdownIntervalRef.current = setInterval(calculateTimeRemaining, 1000);
-
-    // Cleanup on unmount or when expiresAt changes
-    return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
-    };
-  }, [trackingData?.expiresAt]);
-
-  const fetchTrackingData = async (silent = false) => {
+  const fetchTrackingData = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
     }
@@ -181,7 +125,63 @@ export default function PublicTrackingScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [code]);
+
+  useEffect(() => {
+    fetchTrackingData();
+    
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(() => {
+      fetchTrackingData(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchTrackingData]);
+
+  // Real-time countdown timer - updates every second
+  useEffect(() => {
+    if (!trackingData?.expiresAt) {
+      console.log('PublicTrackingScreen: No expiry time, clearing countdown');
+      setTimeRemaining(null);
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+      return;
+    }
+
+    console.log('PublicTrackingScreen: Starting countdown timer for expiry:', trackingData.expiresAt);
+
+    const calculateTimeRemaining = () => {
+      const expiryTime = new Date(trackingData.expiresAt!).getTime();
+      const now = Date.now();
+      const remaining = Math.max(0, expiryTime - now);
+      
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('PublicTrackingScreen: Timer expired, stopping countdown');
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+      }
+    };
+
+    // Calculate immediately
+    calculateTimeRemaining();
+
+    // Then update every second
+    countdownIntervalRef.current = setInterval(calculateTimeRemaining, 1000);
+
+    // Cleanup on unmount or when expiresAt changes
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, [trackingData?.expiresAt]);
 
   const onRefresh = () => {
     console.log('User pulled to refresh');
