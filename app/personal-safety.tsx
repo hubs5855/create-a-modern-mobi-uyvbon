@@ -20,6 +20,7 @@ import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
+import Constants from 'expo-constants';
 
 interface Favorite {
   id: string;
@@ -27,6 +28,22 @@ interface Favorite {
   address: string;
   latitude: number;
   longitude: number;
+}
+
+// Helper function to get the tracking URL based on environment
+function getTrackingUrl(trackingCode: string): string {
+  // In production, use your custom domain
+  // In development, use the Expo dev server URL
+  if (__DEV__) {
+    // For development, use the current app URL
+    const expoUrl = Constants.expoConfig?.hostUri;
+    if (expoUrl) {
+      return `exp://${expoUrl}/track/${trackingCode}`;
+    }
+  }
+  
+  // Production URL - replace with your actual domain when deployed
+  return `https://trackme.lk/track/${trackingCode}`;
 }
 
 export default function PersonalSafetyScreen() {
@@ -363,12 +380,13 @@ export default function PersonalSafetyScreen() {
       return;
     }
     
-    const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
+    const trackingUrl = getTrackingUrl(trackingCode);
     console.log('PersonalSafetyScreen: User tapped Share button, sharing:', trackingUrl);
 
     try {
       await Share.share({
-        message: `Track my live location: ${trackingUrl}`,
+        message: `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`,
+        title: 'Track My Location',
       });
       console.log('PersonalSafetyScreen: Share sheet opened successfully');
     } catch (error) {
@@ -382,8 +400,8 @@ export default function PersonalSafetyScreen() {
       return;
     }
     
-    const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
-    const message = `Track my live location: ${trackingUrl}`;
+    const trackingUrl = getTrackingUrl(trackingCode);
+    const message = `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
     console.log('PersonalSafetyScreen: User tapped WhatsApp share button');
