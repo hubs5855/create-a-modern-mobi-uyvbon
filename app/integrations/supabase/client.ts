@@ -1,25 +1,14 @@
 
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Database } from './types';
 
-// Read Supabase credentials from environment variables
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// Validate that environment variables are set
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error('❌ CRITICAL: Supabase environment variables are not set!');
-  console.error('Please ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are defined in your .env file');
-  // In development, we'll throw an error to make it obvious
-  if (__DEV__) {
-    throw new Error('Supabase credentials missing. Check your .env file.');
-  }
-}
-
-// Define a simple in-memory storage for fallback
+// In-memory storage fallback for when AsyncStorage is unavailable
 class InMemoryStorage {
   private data: { [key: string]: string } = {};
 
