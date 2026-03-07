@@ -1,26 +1,21 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Modal } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { t, saveLanguage, getCurrentLanguage, loadLanguage } from '@/utils/i18n';
-import { supabase } from '@/app/integrations/supabase/client';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState('en');
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   console.log('ProfileScreen: Rendering');
 
   useEffect(() => {
     loadSavedLanguage();
-    checkUserSession();
   }, []);
 
   const loadSavedLanguage = async () => {
@@ -28,51 +23,6 @@ export default function ProfileScreen() {
     const lang = getCurrentLanguage();
     setCurrentLanguage(lang);
     console.log('Current language:', lang);
-  };
-
-  const checkUserSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setIsLoggedIn(true);
-        setUserEmail(session.user.email || null);
-        console.log('User is logged in:', session.user.email);
-      } else {
-        setIsLoggedIn(false);
-        setUserEmail(null);
-        console.log('User is not logged in');
-      }
-    } catch (error) {
-      console.error('Error checking user session:', error);
-    }
-  };
-
-  const handleLogout = async () => {
-    console.log('User tapped Logout button');
-    setShowLogoutModal(false);
-    
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Logout error:', error);
-        Alert.alert('Error', 'Failed to logout. Please try again.');
-        return;
-      }
-      
-      console.log('Logout successful');
-      Alert.alert('Success', 'You have been logged out successfully');
-      
-      // Navigate to welcome screen
-      router.replace('/welcome');
-    } catch (error) {
-      console.error('Logout exception:', error);
-      Alert.alert('Error', 'Failed to logout. Please try again.');
-    }
-  };
-
-  const handleLogin = () => {
-    console.log('User tapped Login button');
-    router.push('/login');
   };
 
   const languages = [
@@ -147,60 +97,8 @@ export default function ProfileScreen() {
             />
           </View>
           <Text style={styles.appName}>{t('app_name')}</Text>
-          {isLoggedIn && userEmail && (
-            <Text style={styles.userEmail}>{userEmail}</Text>
-          )}
           <Text style={styles.appVersion}>{t('version')}</Text>
         </View>
-
-        {/* Login/Logout Section */}
-        {isLoggedIn ? (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.logoutButton]}
-              onPress={() => setShowLogoutModal(true)}
-            >
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="arrow.right.square.fill"
-                  android_material_icon_name="logout"
-                  size={24}
-                  color={colors.error}
-                />
-                <Text style={[styles.menuItemText, styles.logoutText]}>Logout</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.error}
-              />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.loginButton]}
-              onPress={handleLogin}
-            >
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="arrow.right.square.fill"
-                  android_material_icon_name="login"
-                  size={24}
-                  color={colors.accent}
-                />
-                <Text style={[styles.menuItemText, styles.loginText]}>Login</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.accent}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('language')}</Text>
@@ -312,37 +210,6 @@ export default function ProfileScreen() {
           </View>
         </SafeAreaView>
       </Modal>
-
-      {/* Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
-        <View style={styles.logoutModalOverlay}>
-          <View style={styles.logoutModalContent}>
-            <Text style={styles.logoutModalTitle}>Logout</Text>
-            <Text style={styles.logoutModalMessage}>
-              Are you sure you want to logout?
-            </Text>
-            <View style={styles.logoutModalButtons}>
-              <TouchableOpacity
-                style={[styles.logoutModalButton, styles.logoutModalCancelButton]}
-                onPress={() => setShowLogoutModal(false)}
-              >
-                <Text style={styles.logoutModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.logoutModalButton, styles.logoutModalConfirmButton]}
-                onPress={handleLogout}
-              >
-                <Text style={styles.logoutModalConfirmText}>Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -370,26 +237,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  userEmail: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 4,
-  },
   section: {
     marginBottom: 24,
-  },
-  loginButton: {
-    borderColor: colors.accent,
-  },
-  loginText: {
-    color: colors.accent,
-  },
-  logoutButton: {
-    borderColor: colors.error,
-  },
-  logoutText: {
-    color: colors.error,
   },
   sectionTitle: {
     fontSize: 16,
@@ -491,63 +340,5 @@ const styles = StyleSheet.create({
   languageNativeName: {
     fontSize: 14,
     color: colors.textSecondary,
-  },
-  logoutModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  logoutModalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logoutModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  logoutModalMessage: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  logoutModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  logoutModalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  logoutModalCancelButton: {
-    backgroundColor: colors.cardSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logoutModalConfirmButton: {
-    backgroundColor: colors.error,
-  },
-  logoutModalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  logoutModalConfirmText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
   },
 });

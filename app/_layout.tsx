@@ -103,11 +103,6 @@ export default function RootLayout() {
               {/* Welcome screen */}
               <Stack.Screen name="welcome" options={{ headerShown: false }} />
               
-              {/* Auth screens */}
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ headerShown: false }} />
-              <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-              
               {/* Main app with tabs */}
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               

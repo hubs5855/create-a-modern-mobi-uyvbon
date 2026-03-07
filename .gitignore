@@ -1,4 +1,3 @@
-
 node_modules/
 
 .git/
@@ -36,8 +35,3 @@ ios/
 pnpm-lock.yaml
 package-lock.json
 
-# Environment variables - NEVER commit these!
-.env
-.env.local
-.env.development
-.env.production
