@@ -13,7 +13,7 @@ export default function WelcomeScreen() {
 
   const handleGetStarted = () => {
     console.log('User tapped Get Started button');
-    router.replace('/(tabs)/(home)');
+    router.push('/login');
   };
 
   return (
