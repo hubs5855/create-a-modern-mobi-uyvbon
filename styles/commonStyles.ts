@@ -62,11 +62,7 @@ export const commonStyles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
+    boxShadow: `0px 0px 10px ${colors.primary}4D`,
   },
   title: {
     fontSize: 28,

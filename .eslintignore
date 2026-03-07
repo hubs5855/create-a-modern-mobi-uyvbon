@@ -1,3 +1,4 @@
+
 # Ignore generated files
 _expo/
 dist/
@@ -9,3 +10,8 @@ node_modules/
 # Ignore build artifacts
 *.bundle.js
 *.bundle.js.map
+
+# Ignore protected files (DO NOT MODIFY)
+utils/errorLogger.ts
+babel-plugins/**
+metro.config.js
