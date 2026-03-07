@@ -16,9 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.Natively",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to provide tracking services.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location even when in the background to provide continuous tracking."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,13 +25,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.trackme.delivery",
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "FOREGROUND_SERVICE",
-        "ACCESS_BACKGROUND_LOCATION"
-      ]
+      "package": "com.trackme.delivery"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -42,21 +34,7 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow TrackMe LK to use your location for tracking services.",
-          "locationAlwaysPermission": "Allow TrackMe LK to use your location even when the app is in the background.",
-          "locationWhenInUsePermission": "Allow TrackMe LK to use your location while using the app."
-        }
-      ],
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": ""
-        }
-      ]
+      "expo-web-browser"
     ],
     "scheme": "trackmelk",
     "experiments": {

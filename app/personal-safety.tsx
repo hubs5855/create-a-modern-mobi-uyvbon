@@ -32,22 +32,18 @@ interface Favorite {
 
 // Helper function to get the tracking URL based on environment
 function getTrackingUrl(trackingCode: string): string {
-  // PRODUCTION: Replace this with your actual deployed domain
-  // For now, we'll use the Supabase project URL as a temporary web viewer
-  const PRODUCTION_DOMAIN = 'https://dnweopctkrhuuepfadij.supabase.co';
-  
+  // In production, use your custom domain
+  // In development, use the Expo dev server URL
   if (__DEV__) {
-    // Development: Use Expo dev server
+    // For development, use the current app URL
     const expoUrl = Constants.expoConfig?.hostUri;
     if (expoUrl) {
-      // For web preview in development
-      return `http://${expoUrl.split(':')[0]}:8081/track/${trackingCode}`;
+      return `exp://${expoUrl}/track/${trackingCode}`;
     }
   }
   
-  // Production: Use your deployed web app URL
-  // TODO: Replace with your actual domain once deployed (e.g., https://trackme.lk)
-  return `${PRODUCTION_DOMAIN}/track/${trackingCode}`;
+  // Production URL - replace with your actual domain when deployed
+  return `https://trackme.lk/track/${trackingCode}`;
 }
 
 export default function PersonalSafetyScreen() {
@@ -387,12 +383,10 @@ export default function PersonalSafetyScreen() {
     const trackingUrl = getTrackingUrl(trackingCode);
     console.log('PersonalSafetyScreen: User tapped Share button, sharing:', trackingUrl);
 
-    const shareMessage = `🛡️ Track my live location:\n\n📍 Tracking Code: ${trackingCode}\n\n🔗 Open this link in your browser:\n${trackingUrl}\n\n⏰ This link will expire in ${expiryHours} hour(s)`;
-
     try {
       await Share.share({
-        message: shareMessage,
-        title: 'Track My Location - TrackMe LK',
+        message: `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`,
+        title: 'Track My Location',
       });
       console.log('PersonalSafetyScreen: Share sheet opened successfully');
     } catch (error) {
@@ -407,7 +401,7 @@ export default function PersonalSafetyScreen() {
     }
     
     const trackingUrl = getTrackingUrl(trackingCode);
-    const message = `🛡️ Track my live location:\n\n📍 Tracking Code: ${trackingCode}\n\n🔗 ${trackingUrl}\n\n⏰ Expires in ${expiryHours} hour(s)`;
+    const message = `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
     console.log('PersonalSafetyScreen: User tapped WhatsApp share button');
@@ -661,7 +655,6 @@ export default function PersonalSafetyScreen() {
               <View style={styles.trackingCodeCard}>
                 <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
                 <Text style={styles.trackingCode}>{trackingCode}</Text>
-                <Text style={styles.trackingUrlHint}>Share this code or the link below</Text>
               </View>
 
               <View style={styles.statsRow}>
@@ -956,12 +949,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.accent,
     letterSpacing: 4,
-    marginBottom: 8,
-  },
-  trackingUrlHint: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
