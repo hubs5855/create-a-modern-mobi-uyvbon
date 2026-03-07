@@ -10,10 +10,17 @@ export interface MapMarker {
   longitude: number;
   title?: string;
   description?: string;
+  type?: 'driver' | 'customer' | 'destination' | 'default';
+}
+
+export interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
 }
 
 interface MapProps {
   markers?: MapMarker[];
+  routeCoordinates?: RouteCoordinate[];
   initialRegion?: {
     latitude: number;
     longitude: number;
@@ -23,10 +30,12 @@ interface MapProps {
   style?: ViewStyle;
   showsUserLocation?: boolean;
   onMapPress?: (latitude: number, longitude: number) => void;
+  centerOnMarkers?: boolean;
 }
 
 export function Map({
   markers = [],
+  routeCoordinates = [],
   initialRegion = {
     latitude: 37.78825,
     longitude: -122.4324,
@@ -36,10 +45,12 @@ export function Map({
   style,
   showsUserLocation = false,
   onMapPress,
+  centerOnMarkers = true,
 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+  const markersRef = useRef<{ [key: string]: L.Marker }>({});
+  const polylineRef = useRef<L.Polyline | null>(null);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -74,25 +85,97 @@ export function Map({
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
-
-    // Add new markers
-    markers.forEach(markerData => {
-      const marker = L.marker([markerData.latitude, markerData.longitude]).addTo(mapRef.current!);
-      if (markerData.title) {
-        marker.bindPopup(markerData.title);
-      }
-      markersRef.current.push(marker);
+    // Custom icons
+    const driverIcon = L.divIcon({
+      html: '<div style="font-size: 32px; text-align: center; line-height: 1;">🚗</div>',
+      className: '',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
     });
 
-    // Fit bounds if there are markers
-    if (markers.length > 0) {
-      const bounds = L.latLngBounds(markers.map(m => [m.latitude, m.longitude]));
-      mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+    const customerIcon = L.divIcon({
+      html: '<div style="font-size: 28px; text-align: center; line-height: 1;">📍</div>',
+      className: '',
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+    });
+
+    const destinationIcon = L.divIcon({
+      html: '<div style="font-size: 28px; text-align: center; line-height: 1;">🎯</div>',
+      className: '',
+      iconSize: [36, 36],
+      iconAnchor: [18, 36],
+    });
+
+    // Update or create markers
+    const currentMarkerIds = new Set(markers.map(m => m.id));
+    
+    // Remove markers that no longer exist
+    Object.keys(markersRef.current).forEach(id => {
+      if (!currentMarkerIds.has(id)) {
+        markersRef.current[id].remove();
+        delete markersRef.current[id];
+      }
+    });
+
+    // Add or update markers
+    markers.forEach(markerData => {
+      let icon = null;
+      if (markerData.type === 'driver') {
+        icon = driverIcon;
+      } else if (markerData.type === 'customer') {
+        icon = customerIcon;
+      } else if (markerData.type === 'destination') {
+        icon = destinationIcon;
+      }
+
+      if (markersRef.current[markerData.id]) {
+        // Update existing marker position with smooth animation
+        const marker = markersRef.current[markerData.id];
+        marker.setLatLng([markerData.latitude, markerData.longitude]);
+      } else {
+        // Create new marker
+        const marker = L.marker(
+          [markerData.latitude, markerData.longitude],
+          icon ? { icon } : {}
+        ).addTo(mapRef.current!);
+        
+        if (markerData.title) {
+          marker.bindPopup(markerData.title);
+        }
+
+        markersRef.current[markerData.id] = marker;
+      }
+    });
+
+    // Update route polyline
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
     }
-  }, [markers]);
+
+    if (routeCoordinates && routeCoordinates.length > 1) {
+      const routeLatLngs = routeCoordinates.map(coord => [coord.latitude, coord.longitude] as [number, number]);
+      polylineRef.current = L.polyline(routeLatLngs, {
+        color: '#4A90E2',
+        weight: 4,
+        opacity: 0.7,
+        smoothFactor: 1,
+      }).addTo(mapRef.current);
+    }
+
+    // Fit bounds if there are markers or route
+    if (centerOnMarkers) {
+      const allPoints: [number, number][] = [];
+      markers.forEach(m => allPoints.push([m.latitude, m.longitude]));
+      routeCoordinates.forEach(c => allPoints.push([c.latitude, c.longitude]));
+      
+      if (allPoints.length > 0) {
+        const bounds = L.latLngBounds(allPoints);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [markers, routeCoordinates, centerOnMarkers]);
 
   return (
     <View style={[styles.container, style]}>

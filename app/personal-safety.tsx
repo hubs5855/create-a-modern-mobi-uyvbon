@@ -20,6 +20,7 @@ import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
+import Constants from 'expo-constants';
 
 interface Favorite {
   id: string;
@@ -27,6 +28,26 @@ interface Favorite {
   address: string;
   latitude: number;
   longitude: number;
+}
+
+// Helper function to get the tracking URL based on environment
+function getTrackingUrl(trackingCode: string): string {
+  // PRODUCTION: Replace this with your actual deployed domain
+  // For now, we'll use the Supabase project URL as a temporary web viewer
+  const PRODUCTION_DOMAIN = 'https://dnweopctkrhuuepfadij.supabase.co';
+  
+  if (__DEV__) {
+    // Development: Use Expo dev server
+    const expoUrl = Constants.expoConfig?.hostUri;
+    if (expoUrl) {
+      // For web preview in development
+      return `http://${expoUrl.split(':')[0]}:8081/track/${trackingCode}`;
+    }
+  }
+  
+  // Production: Use your deployed web app URL
+  // TODO: Replace with your actual domain once deployed (e.g., https://trackme.lk)
+  return `${PRODUCTION_DOMAIN}/track/${trackingCode}`;
 }
 
 export default function PersonalSafetyScreen() {
@@ -40,7 +61,9 @@ export default function PersonalSafetyScreen() {
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
+  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('PersonalSafetyScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
@@ -59,6 +82,53 @@ export default function PersonalSafetyScreen() {
     getBatteryLevel();
     fetchFavorites();
   }, []);
+
+  // Real-time countdown timer - updates every second
+  useEffect(() => {
+    if (!expiresAt) {
+      console.log('PersonalSafetyScreen: No expiry time, clearing countdown');
+      setTimeRemaining(null);
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+        countdownInterval.current = null;
+      }
+      return;
+    }
+
+    console.log('PersonalSafetyScreen: Starting countdown timer for expiry:', expiresAt);
+
+    const calculateTimeRemaining = () => {
+      const expiryTime = new Date(expiresAt).getTime();
+      const now = Date.now();
+      const remaining = Math.max(0, expiryTime - now);
+      
+      console.log('PersonalSafetyScreen: Time remaining (ms):', remaining);
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('PersonalSafetyScreen: Timer expired, stopping countdown');
+        if (countdownInterval.current) {
+          clearInterval(countdownInterval.current);
+          countdownInterval.current = null;
+        }
+      }
+    };
+
+    // Calculate immediately
+    calculateTimeRemaining();
+
+    // Then update every second
+    countdownInterval.current = setInterval(calculateTimeRemaining, 1000);
+
+    // Cleanup on unmount or when expiresAt changes
+    return () => {
+      console.log('PersonalSafetyScreen: Cleaning up countdown timer');
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+        countdownInterval.current = null;
+      }
+    };
+  }, [expiresAt]);
 
   const fetchFavorites = async () => {
     console.log('PersonalSafetyScreen: Fetching favorites from Supabase...');
@@ -170,6 +240,7 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Tracking started successfully!');
       console.log('PersonalSafetyScreen: Session ID:', session.id);
       console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
+      console.log('PersonalSafetyScreen: Expires At:', expiryTime.toISOString());
 
       startLocationUpdates(session.id);
     } catch (error) {
@@ -233,6 +304,12 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Location updates stopped');
     }
 
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+      console.log('PersonalSafetyScreen: Countdown timer stopped');
+    }
+
     if (sessionId) {
       try {
         console.log('PersonalSafetyScreen: Marking session as stopped in database...');
@@ -254,6 +331,7 @@ export default function PersonalSafetyScreen() {
     setSessionId(null);
     setTrackingCode(null);
     setExpiresAt(null);
+    setTimeRemaining(null);
     console.log('PersonalSafetyScreen: Tracking stopped, state reset');
   };
 
@@ -306,12 +384,15 @@ export default function PersonalSafetyScreen() {
       return;
     }
     
-    const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
+    const trackingUrl = getTrackingUrl(trackingCode);
     console.log('PersonalSafetyScreen: User tapped Share button, sharing:', trackingUrl);
+
+    const shareMessage = `🛡️ Track my live location:\n\n📍 Tracking Code: ${trackingCode}\n\n🔗 Open this link in your browser:\n${trackingUrl}\n\n⏰ This link will expire in ${expiryHours} hour(s)`;
 
     try {
       await Share.share({
-        message: `Track my live location: ${trackingUrl}`,
+        message: shareMessage,
+        title: 'Track My Location - TrackMe LK',
       });
       console.log('PersonalSafetyScreen: Share sheet opened successfully');
     } catch (error) {
@@ -325,8 +406,8 @@ export default function PersonalSafetyScreen() {
       return;
     }
     
-    const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
-    const message = `Track my live location: ${trackingUrl}`;
+    const trackingUrl = getTrackingUrl(trackingCode);
+    const message = `🛡️ Track my live location:\n\n📍 Tracking Code: ${trackingCode}\n\n🔗 ${trackingUrl}\n\n⏰ Expires in ${expiryHours} hour(s)`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
     console.log('PersonalSafetyScreen: User tapped WhatsApp share button');
@@ -364,10 +445,23 @@ export default function PersonalSafetyScreen() {
     router.push('/favorites');
   };
 
-  const expiryTimeRemaining = expiresAt ? new Date(expiresAt).getTime() - Date.now() : 0;
-  const hoursRemaining = Math.floor(expiryTimeRemaining / (1000 * 60 * 60));
-  const minutesRemaining = Math.floor((expiryTimeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-  const timeRemainingText = `${hoursRemaining}h ${minutesRemaining}m`;
+  const formatCountdown = (ms: number | null): string => {
+    if (ms === null || ms <= 0) {
+      return 'Expired';
+    }
+
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (num: number) => num.toString().padStart(2, '0');
+
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
+  const timeRemainingText = formatCountdown(timeRemaining);
+  const batteryText = batteryLevel !== null ? `${batteryLevel}%` : 'N/A';
 
   console.log('PersonalSafetyScreen: Rendering UI, favorites count:', favorites.length);
 
@@ -567,6 +661,7 @@ export default function PersonalSafetyScreen() {
               <View style={styles.trackingCodeCard}>
                 <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
                 <Text style={styles.trackingCode}>{trackingCode}</Text>
+                <Text style={styles.trackingUrlHint}>Share this code or the link below</Text>
               </View>
 
               <View style={styles.statsRow}>
@@ -575,10 +670,15 @@ export default function PersonalSafetyScreen() {
                     ios_icon_name="clock.fill"
                     android_material_icon_name="schedule"
                     size={20}
-                    color={colors.primary}
+                    color={timeRemaining && timeRemaining > 0 ? colors.primary : colors.danger}
                   />
                   <Text style={styles.statLabel}>Time Left</Text>
-                  <Text style={styles.statValue}>{timeRemainingText}</Text>
+                  <Text style={[
+                    styles.statValue,
+                    timeRemaining && timeRemaining <= 0 && { color: colors.danger }
+                  ]}>
+                    {timeRemainingText}
+                  </Text>
                 </View>
                 <View style={styles.statItem}>
                   <IconSymbol
@@ -588,7 +688,7 @@ export default function PersonalSafetyScreen() {
                     color={colors.accent}
                   />
                   <Text style={styles.statLabel}>Battery</Text>
-                  <Text style={styles.statValue}>{batteryLevel}%</Text>
+                  <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
 
@@ -856,6 +956,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.accent,
     letterSpacing: 4,
+    marginBottom: 8,
+  },
+  trackingUrlHint: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
