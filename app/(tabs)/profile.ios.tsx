@@ -19,59 +19,83 @@ export default function ProfileScreen() {
   console.log('ProfileScreen (iOS): Rendering');
 
   useEffect(() => {
-    loadSavedLanguage();
-    checkUserSession();
+    const initializeProfile = async () => {
+      try {
+        await loadSavedLanguage();
+        await checkUserSession();
+      } catch (error) {
+        console.error('ProfileScreen (iOS): Error during initialization:', error);
+      }
+    };
+
+    initializeProfile();
   }, []);
 
   const loadSavedLanguage = async () => {
-    await loadLanguage();
-    const lang = getCurrentLanguage();
-    setCurrentLanguage(lang);
-    console.log('Current language:', lang);
+    try {
+      await loadLanguage();
+      const lang = getCurrentLanguage();
+      setCurrentLanguage(lang);
+      console.log('ProfileScreen (iOS): Current language:', lang);
+    } catch (error) {
+      console.error('ProfileScreen (iOS): Error loading language:', error);
+      setCurrentLanguage('en');
+    }
   };
 
   const checkUserSession = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log('ProfileScreen (iOS): Checking user session...');
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('ProfileScreen (iOS): Error getting session:', error);
+        setIsLoggedIn(false);
+        setUserEmail(null);
+        return;
+      }
+
       if (session?.user) {
         setIsLoggedIn(true);
         setUserEmail(session.user.email || null);
-        console.log('User is logged in:', session.user.email);
+        console.log('ProfileScreen (iOS): User is logged in:', session.user.email);
       } else {
         setIsLoggedIn(false);
         setUserEmail(null);
-        console.log('User is not logged in');
+        console.log('ProfileScreen (iOS): User is not logged in');
       }
     } catch (error) {
-      console.error('Error checking user session:', error);
+      console.error('ProfileScreen (iOS): Exception checking user session:', error);
+      setIsLoggedIn(false);
+      setUserEmail(null);
     }
   };
 
   const handleLogout = async () => {
-    console.log('User tapped Logout button');
+    console.log('ProfileScreen (iOS): User tapped Logout button');
     setShowLogoutModal(false);
     
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Logout error:', error);
+        console.error('ProfileScreen (iOS): Logout error:', error);
         Alert.alert('Error', 'Failed to logout. Please try again.');
         return;
       }
       
-      console.log('Logout successful');
+      console.log('ProfileScreen (iOS): Logout successful');
       Alert.alert('Success', 'You have been logged out successfully');
       
       // Navigate to welcome screen
       router.replace('/welcome');
     } catch (error) {
-      console.error('Logout exception:', error);
+      console.error('ProfileScreen (iOS): Logout exception:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
     }
   };
 
   const handleLogin = () => {
-    console.log('User tapped Login button');
+    console.log('ProfileScreen (iOS): User tapped Login button');
     router.push('/login');
   };
 
@@ -82,14 +106,15 @@ export default function ProfileScreen() {
   ];
 
   const handleLanguageSelect = async (languageCode: string) => {
-    console.log('User selected language:', languageCode);
-    await saveLanguage(languageCode);
-    setCurrentLanguage(languageCode);
-    setShowLanguageModal(false);
-    // Force re-render by updating state
-    setTimeout(() => {
-      console.log('Language changed, UI will update');
-    }, 100);
+    console.log('ProfileScreen (iOS): User selected language:', languageCode);
+    try {
+      await saveLanguage(languageCode);
+      setCurrentLanguage(languageCode);
+      setShowLanguageModal(false);
+      console.log('ProfileScreen (iOS): Language changed successfully');
+    } catch (error) {
+      console.error('ProfileScreen (iOS): Error changing language:', error);
+    }
   };
 
   const menuItems = [
@@ -114,7 +139,7 @@ export default function ProfileScreen() {
   ];
 
   const handleMenuPress = (item: any) => {
-    console.log('User tapped menu item:', item.id);
+    console.log('ProfileScreen (iOS): User tapped menu item:', item.id);
     if (item.action) {
       item.action();
     } else if (item.route) {

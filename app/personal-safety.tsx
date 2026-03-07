@@ -40,7 +40,9 @@ export default function PersonalSafetyScreen() {
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
+  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('PersonalSafetyScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
@@ -59,6 +61,53 @@ export default function PersonalSafetyScreen() {
     getBatteryLevel();
     fetchFavorites();
   }, []);
+
+  // Real-time countdown timer - updates every second
+  useEffect(() => {
+    if (!expiresAt) {
+      console.log('PersonalSafetyScreen: No expiry time, clearing countdown');
+      setTimeRemaining(null);
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+        countdownInterval.current = null;
+      }
+      return;
+    }
+
+    console.log('PersonalSafetyScreen: Starting countdown timer for expiry:', expiresAt);
+
+    const calculateTimeRemaining = () => {
+      const expiryTime = new Date(expiresAt).getTime();
+      const now = Date.now();
+      const remaining = Math.max(0, expiryTime - now);
+      
+      console.log('PersonalSafetyScreen: Time remaining (ms):', remaining);
+      setTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('PersonalSafetyScreen: Timer expired, stopping countdown');
+        if (countdownInterval.current) {
+          clearInterval(countdownInterval.current);
+          countdownInterval.current = null;
+        }
+      }
+    };
+
+    // Calculate immediately
+    calculateTimeRemaining();
+
+    // Then update every second
+    countdownInterval.current = setInterval(calculateTimeRemaining, 1000);
+
+    // Cleanup on unmount or when expiresAt changes
+    return () => {
+      console.log('PersonalSafetyScreen: Cleaning up countdown timer');
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+        countdownInterval.current = null;
+      }
+    };
+  }, [expiresAt]);
 
   const fetchFavorites = async () => {
     console.log('PersonalSafetyScreen: Fetching favorites from Supabase...');
@@ -170,6 +219,7 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Tracking started successfully!');
       console.log('PersonalSafetyScreen: Session ID:', session.id);
       console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
+      console.log('PersonalSafetyScreen: Expires At:', expiryTime.toISOString());
 
       startLocationUpdates(session.id);
     } catch (error) {
@@ -233,6 +283,12 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Location updates stopped');
     }
 
+    if (countdownInterval.current) {
+      clearInterval(countdownInterval.current);
+      countdownInterval.current = null;
+      console.log('PersonalSafetyScreen: Countdown timer stopped');
+    }
+
     if (sessionId) {
       try {
         console.log('PersonalSafetyScreen: Marking session as stopped in database...');
@@ -254,6 +310,7 @@ export default function PersonalSafetyScreen() {
     setSessionId(null);
     setTrackingCode(null);
     setExpiresAt(null);
+    setTimeRemaining(null);
     console.log('PersonalSafetyScreen: Tracking stopped, state reset');
   };
 
@@ -364,10 +421,23 @@ export default function PersonalSafetyScreen() {
     router.push('/favorites');
   };
 
-  const expiryTimeRemaining = expiresAt ? new Date(expiresAt).getTime() - Date.now() : 0;
-  const hoursRemaining = Math.floor(expiryTimeRemaining / (1000 * 60 * 60));
-  const minutesRemaining = Math.floor((expiryTimeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-  const timeRemainingText = `${hoursRemaining}h ${minutesRemaining}m`;
+  const formatCountdown = (ms: number | null): string => {
+    if (ms === null || ms <= 0) {
+      return 'Expired';
+    }
+
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const pad = (num: number) => num.toString().padStart(2, '0');
+
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
+  const timeRemainingText = formatCountdown(timeRemaining);
+  const batteryText = batteryLevel !== null ? `${batteryLevel}%` : 'N/A';
 
   console.log('PersonalSafetyScreen: Rendering UI, favorites count:', favorites.length);
 
@@ -575,10 +645,15 @@ export default function PersonalSafetyScreen() {
                     ios_icon_name="clock.fill"
                     android_material_icon_name="schedule"
                     size={20}
-                    color={colors.primary}
+                    color={timeRemaining && timeRemaining > 0 ? colors.primary : colors.danger}
                   />
                   <Text style={styles.statLabel}>Time Left</Text>
-                  <Text style={styles.statValue}>{timeRemainingText}</Text>
+                  <Text style={[
+                    styles.statValue,
+                    timeRemaining && timeRemaining <= 0 && { color: colors.danger }
+                  ]}>
+                    {timeRemainingText}
+                  </Text>
                 </View>
                 <View style={styles.statItem}>
                   <IconSymbol
@@ -588,7 +663,7 @@ export default function PersonalSafetyScreen() {
                     color={colors.accent}
                   />
                   <Text style={styles.statLabel}>Battery</Text>
-                  <Text style={styles.statValue}>{batteryLevel}%</Text>
+                  <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
 
