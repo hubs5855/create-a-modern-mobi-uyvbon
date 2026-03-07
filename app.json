@@ -1,6 +1,7 @@
+
 {
   "expo": {
-    "name": "Trackmelk",
+    "name": "TrackMe LK",
     "slug": "trackmelk",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,9 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.trackmelk.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background."
       }
     },
     "android": {
@@ -25,7 +29,14 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.trackme.delivery"
+      "package": "com.trackmelk.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -34,7 +45,17 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
+          "locationAlwaysPermission": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background.",
+          "locationWhenInUsePermission": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ],
     "scheme": "trackmelk",
     "experiments": {
