@@ -100,10 +100,6 @@ const translations = {
     seconds_ago: 'seconds ago',
     minutes_ago: 'minutes ago',
     expired: 'Expired',
-    driver_location: 'Driver Location',
-    distance: 'Distance',
-    eta: 'ETA',
-    delivery_information: 'Delivery Information',
     
     // Settings/Profile
     settings: 'Settings',

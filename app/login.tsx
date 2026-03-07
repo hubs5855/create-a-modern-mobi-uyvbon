@@ -57,7 +57,6 @@ export default function LoginScreen() {
 
     try {
       console.log('Attempting to sign in with email:', email);
-      console.log('Supabase client status:', supabase ? 'initialized' : 'not initialized');
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
@@ -65,47 +64,19 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        console.error('Login error from Supabase:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        
-        // Check for specific error types
-        if (error.message.includes('Invalid login credentials')) {
-          Alert.alert(t('error'), 'Invalid email or password. Please try again.');
-        } else if (error.message.includes('Email not confirmed')) {
-          Alert.alert(t('error'), 'Please confirm your email address before logging in.');
-        } else if (error.message.includes('storage')) {
-          Alert.alert(
-            t('error'), 
-            'Storage error. The app will work but sessions may not persist. Please restart the app.'
-          );
-        } else {
-          Alert.alert(t('error'), error.message || t('login_error'));
-        }
+        console.error('Login error:', error);
+        Alert.alert(t('error'), t('login_error'));
         return;
       }
 
-      console.log('Login successful, user ID:', data?.user?.id);
-      console.log('Session created:', data?.session ? 'yes' : 'no');
-      
+      console.log('Login successful:', data);
       Alert.alert(t('success'), t('login_success'));
       
       // Navigate to home screen
       router.replace('/(tabs)/(home)');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Login exception:', error);
-      console.error('Exception type:', error?.name);
-      console.error('Exception message:', error?.message);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
-      
-      // Handle AsyncStorage errors specifically
-      if (error?.name === 'AsyncStorageError' || error?.message?.includes('AsyncStorage')) {
-        Alert.alert(
-          'Storage Warning',
-          'The app is having trouble accessing device storage. You can still log in, but your session may not persist after closing the app. Please restart the app if this continues.'
-        );
-      } else {
-        Alert.alert(t('error'), error?.message || t('login_error'));
-      }
+      Alert.alert(t('error'), t('login_error'));
     } finally {
       setLoading(false);
     }

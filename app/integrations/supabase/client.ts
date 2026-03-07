@@ -1,15 +1,35 @@
 
 import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Database } from '@/types/supabase';
+import type { Database } from './types';
 
-// Supabase project credentials
-const SUPABASE_URL = 'https://dnweopctkrhuuepfadij.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRud2VvcGN0a3JodXVlcGZhZGlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MzI2OTIsImV4cCI6MjA4ODEwODY5Mn0.rN0NviHd3Xm6kGtYvxyEUuhJVrP7600Q0CrMvvIYI4g';
+// Read Supabase credentials from environment variables
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// In-memory storage fallback for when AsyncStorage is unavailable
+// Validate that environment variables are set
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  const errorMessage = `
+╔════════════════════════════════════════════════════════════════╗
+║  ❌ SUPABASE CONFIGURATION ERROR                               ║
+╠════════════════════════════════════════════════════════════════╣
+║  Missing required environment variables:                       ║
+║  - EXPO_PUBLIC_SUPABASE_URL                                    ║
+║  - EXPO_PUBLIC_SUPABASE_ANON_KEY                               ║
+║                                                                 ║
+║  Please ensure your .env file exists with these variables.     ║
+╚════════════════════════════════════════════════════════════════╝
+  `;
+  console.error(errorMessage);
+  
+  if (__DEV__) {
+    throw new Error('Supabase credentials missing. Check your .env file and restart the app.');
+  }
+}
+
+// Define a simple in-memory storage for fallback
 class InMemoryStorage {
   private data: { [key: string]: string } = {};
 
@@ -26,8 +46,8 @@ class InMemoryStorage {
   }
 }
 
-// Create storage adapter function
-function createSupabaseStorage() {
+// Determine which storage to use based on platform
+const getStorageAdapter = () => {
   try {
     if (Platform.OS === 'web') {
       // Use localStorage for web
@@ -36,54 +56,27 @@ function createSupabaseStorage() {
         setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
         removeItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
       };
+    } else if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
+      // Use AsyncStorage for native
+      return AsyncStorage;
     } else {
-      // For native platforms, test AsyncStorage before using it
-      if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
-        // Wrap AsyncStorage with error handling
-        return {
-          getItem: async (key: string) => {
-            try {
-              return await AsyncStorage.getItem(key);
-            } catch (error) {
-              console.warn('AsyncStorage getItem error:', error);
-              return null;
-            }
-          },
-          setItem: async (key: string, value: string) => {
-            try {
-              await AsyncStorage.setItem(key, value);
-            } catch (error) {
-              console.warn('AsyncStorage setItem error:', error);
-            }
-          },
-          removeItem: async (key: string) => {
-            try {
-              await AsyncStorage.removeItem(key);
-            } catch (error) {
-              console.warn('AsyncStorage removeItem error:', error);
-            }
-          },
-        };
-      } else {
-        // Fallback to in-memory storage if AsyncStorage is null or not functional
-        console.warn('⚠️ AsyncStorage unavailable, using in-memory storage. Sessions will not persist.');
-        return new InMemoryStorage();
-      }
+      // Fallback to in-memory storage
+      console.warn('⚠️ AsyncStorage not available, using in-memory storage. Sessions will not persist.');
+      return new InMemoryStorage();
     }
   } catch (error) {
-    // If any error occurs during storage detection, use in-memory storage
-    console.warn('⚠️ Error creating storage adapter, using in-memory storage:', error);
+    console.warn('⚠️ Error detecting storage adapter:', error);
     return new InMemoryStorage();
   }
-}
+};
 
-// Create Supabase client with proper configuration
-const supabaseClient = createClient<Database>(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY,
+// Create and export the Supabase client
+export const supabase = createClient<Database>(
+  SUPABASE_URL || '', 
+  SUPABASE_ANON_KEY || '', 
   {
     auth: {
-      storage: createSupabaseStorage(),
+      storage: getStorageAdapter(),
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
@@ -93,5 +86,4 @@ const supabaseClient = createClient<Database>(
 
 console.log('✅ Supabase client initialized successfully');
 
-export const supabase = supabaseClient;
 export default supabase;

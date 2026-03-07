@@ -64,7 +64,6 @@ export default function SignUpScreen() {
 
     try {
       console.log('Attempting to sign up with email:', email);
-      console.log('Supabase client status:', supabase ? 'initialized' : 'not initialized');
       
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -72,51 +71,19 @@ export default function SignUpScreen() {
       });
 
       if (error) {
-        console.error('Signup error from Supabase:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        
-        // Check for specific error types
-        if (error.message.includes('already registered')) {
-          Alert.alert(t('error'), 'This email is already registered. Please login instead.');
-        } else if (error.message.includes('storage')) {
-          Alert.alert(
-            t('error'), 
-            'Storage error. The app will work but sessions may not persist. Please restart the app.'
-          );
-        } else {
-          Alert.alert(t('error'), error.message || t('signup_error'));
-        }
+        console.error('Sign up error:', error);
+        Alert.alert(t('error'), t('signup_error'));
         return;
       }
 
-      console.log('Signup successful, user ID:', data?.user?.id);
-      console.log('Session created:', data?.session ? 'yes' : 'no');
+      console.log('Sign up successful:', data);
+      Alert.alert(t('success'), t('signup_success'));
       
-      Alert.alert(
-        t('success'), 
-        'Account created successfully! Please check your email to confirm your account.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/login'),
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('Signup exception:', error);
-      console.error('Exception type:', error?.name);
-      console.error('Exception message:', error?.message);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
-      
-      // Handle AsyncStorage errors specifically
-      if (error?.name === 'AsyncStorageError' || error?.message?.includes('AsyncStorage')) {
-        Alert.alert(
-          'Storage Warning',
-          'The app is having trouble accessing device storage. You can still sign up, but your session may not persist after closing the app. Please restart the app if this continues.'
-        );
-      } else {
-        Alert.alert(t('error'), error?.message || t('signup_error'));
-      }
+      // Navigate to home screen
+      router.replace('/(tabs)/(home)');
+    } catch (error) {
+      console.error('Sign up exception:', error);
+      Alert.alert(t('error'), t('signup_error'));
     } finally {
       setLoading(false);
     }
@@ -124,7 +91,7 @@ export default function SignUpScreen() {
 
   const handleLogin = () => {
     console.log('User tapped Login link');
-    router.push('/login');
+    router.back();
   };
 
   return (
@@ -148,7 +115,7 @@ export default function SignUpScreen() {
             {/* Header */}
             <View style={styles.header}>
               <Text style={styles.title}>{t('signup')}</Text>
-              <Text style={styles.subtitle}>{t('create_account')}</Text>
+              <Text style={styles.subtitle}>{t('home_subtitle')}</Text>
             </View>
 
             {/* Form */}
@@ -223,7 +190,7 @@ export default function SignUpScreen() {
                 </View>
                 <TextInput
                   style={styles.input}
-                  placeholder={t('confirm_password')}
+                  placeholder={t('enter_confirm_password')}
                   placeholderTextColor={colors.textSecondary}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
@@ -269,7 +236,7 @@ export default function SignUpScreen() {
 
               {/* Login Link */}
               <View style={styles.loginContainer}>
-                <Text style={styles.loginText}>{t('already_have_account')} </Text>
+                <Text style={styles.loginText}>{t('have_account')} </Text>
                 <TouchableOpacity onPress={handleLogin} disabled={loading}>
                   <Text style={styles.loginLink}>{t('login')}</Text>
                 </TouchableOpacity>

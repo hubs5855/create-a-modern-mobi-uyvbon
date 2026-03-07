@@ -50,10 +50,7 @@ export default function DeliveryModeScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [showTrafficAlert, setShowTrafficAlert] = useState(false);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
-  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
@@ -61,53 +58,6 @@ export default function DeliveryModeScreen() {
     console.log('DeliveryModeScreen: Component mounted, getting current location...');
     getCurrentLocation();
   }, []);
-
-  // Real-time countdown timer - updates every second
-  useEffect(() => {
-    if (!expiresAt) {
-      console.log('DeliveryModeScreen: No expiry time, clearing countdown');
-      setTimeRemaining(null);
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
-        countdownInterval.current = null;
-      }
-      return;
-    }
-
-    console.log('DeliveryModeScreen: Starting countdown timer for expiry:', expiresAt);
-
-    const calculateTimeRemaining = () => {
-      const expiryTime = new Date(expiresAt).getTime();
-      const now = Date.now();
-      const remaining = Math.max(0, expiryTime - now);
-      
-      console.log('DeliveryModeScreen: Time remaining (ms):', remaining);
-      setTimeRemaining(remaining);
-
-      if (remaining <= 0) {
-        console.log('DeliveryModeScreen: Timer expired, stopping countdown');
-        if (countdownInterval.current) {
-          clearInterval(countdownInterval.current);
-          countdownInterval.current = null;
-        }
-      }
-    };
-
-    // Calculate immediately
-    calculateTimeRemaining();
-
-    // Then update every second
-    countdownInterval.current = setInterval(calculateTimeRemaining, 1000);
-
-    // Cleanup on unmount or when expiresAt changes
-    return () => {
-      console.log('DeliveryModeScreen: Cleaning up countdown timer');
-      if (countdownInterval.current) {
-        clearInterval(countdownInterval.current);
-        countdownInterval.current = null;
-      }
-    };
-  }, [expiresAt]);
 
   const getCurrentLocation = async () => {
     try {
@@ -263,15 +213,11 @@ export default function DeliveryModeScreen() {
 
       const newTrackingCode = generateTrackingCode();
       const newOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
-      
-      // Set expiry time to 8 hours from now for delivery mode
-      const expiryTime = new Date(Date.now() + 8 * 60 * 60 * 1000);
 
       console.log('DeliveryModeScreen: Creating delivery session in Supabase with destination');
       console.log('DeliveryModeScreen: Order ID:', newOrderId);
       console.log('DeliveryModeScreen: Customer Name:', customerName || 'None');
       console.log('DeliveryModeScreen: Destination:', destination);
-      console.log('DeliveryModeScreen: Expiry time:', expiryTime.toISOString());
 
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
@@ -286,7 +232,6 @@ export default function DeliveryModeScreen() {
           destination_latitude: destination.latitude,
           destination_longitude: destination.longitude,
           destination_address: destination.address,
-          expiry_time: expiryTime.toISOString(),
         })
         .select()
         .single();
@@ -324,7 +269,6 @@ export default function DeliveryModeScreen() {
       setSessionId(session.id);
       setOrderId(newOrderId);
       setTrackingCode(newTrackingCode);
-      setExpiresAt(expiryTime.toISOString());
       setIsTracking(true);
       setDeliveryStatus('pending');
 
@@ -332,7 +276,6 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Session ID:', session.id);
       console.log('DeliveryModeScreen: Order ID:', newOrderId);
       console.log('DeliveryModeScreen: Tracking Code:', newTrackingCode);
-      console.log('DeliveryModeScreen: Expires At:', expiryTime.toISOString());
 
       startLocationUpdates(session.id);
     } catch (error) {
@@ -437,12 +380,6 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Location updates stopped');
     }
 
-    if (countdownInterval.current) {
-      clearInterval(countdownInterval.current);
-      countdownInterval.current = null;
-      console.log('DeliveryModeScreen: Countdown timer stopped');
-    }
-
     if (sessionId) {
       try {
         console.log('DeliveryModeScreen: Marking session as stopped in database...');
@@ -469,8 +406,6 @@ export default function DeliveryModeScreen() {
     setDeliveryAddress('');
     setDestination(null);
     setShowTrafficAlert(false);
-    setExpiresAt(null);
-    setTimeRemaining(null);
     console.log('DeliveryModeScreen: Delivery tracking stopped, state reset');
   };
 
@@ -551,24 +486,8 @@ export default function DeliveryModeScreen() {
     }
   };
 
-  const formatCountdown = (ms: number | null): string => {
-    if (ms === null || ms <= 0) {
-      return 'Expired';
-    }
-
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    const pad = (num: number) => num.toString().padStart(2, '0');
-
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  };
-
   const statusText = getStatusText(deliveryStatus);
   const statusColor = getStatusColor(deliveryStatus);
-  const timeRemainingText = formatCountdown(timeRemaining);
 
   console.log('DeliveryModeScreen: Rendering UI, destination:', destination ? 'Set' : 'Not set');
 
@@ -741,17 +660,6 @@ export default function DeliveryModeScreen() {
                     <Text style={styles.orderInfoValue}>{destination.address}</Text>
                   </View>
                 ) : null}
-                {expiresAt && (
-                  <View style={styles.orderInfoRow}>
-                    <Text style={styles.orderInfoLabel}>Time Remaining</Text>
-                    <Text style={[
-                      styles.orderInfoValue,
-                      timeRemaining && timeRemaining <= 0 && { color: colors.danger }
-                    ]}>
-                      {timeRemainingText}
-                    </Text>
-                  </View>
-                )}
               </View>
 
               {/* Traffic Alert */}
