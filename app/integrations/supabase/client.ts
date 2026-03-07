@@ -7,15 +7,25 @@ import type { Database } from './types';
 
 // Read Supabase credentials from environment variables
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 // Validate that environment variables are set
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.error('❌ CRITICAL: Supabase environment variables are not set!');
-  console.error('Please ensure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are defined in your .env file');
-  // In development, we'll throw an error to make it obvious
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  const errorMessage = `
+╔════════════════════════════════════════════════════════════════╗
+║  ❌ SUPABASE CONFIGURATION ERROR                               ║
+╠════════════════════════════════════════════════════════════════╣
+║  Missing required environment variables:                       ║
+║  - EXPO_PUBLIC_SUPABASE_URL                                    ║
+║  - EXPO_PUBLIC_SUPABASE_ANON_KEY                               ║
+║                                                                 ║
+║  Please ensure your .env file exists with these variables.     ║
+╚════════════════════════════════════════════════════════════════╝
+  `;
+  console.error(errorMessage);
+  
   if (__DEV__) {
-    throw new Error('Supabase credentials missing. Check your .env file.');
+    throw new Error('Supabase credentials missing. Check your .env file and restart the app.');
   }
 }
 
@@ -36,42 +46,37 @@ class InMemoryStorage {
   }
 }
 
-// Determine which storage to use based on platform and AsyncStorage availability
-let storageAdapter: any;
-
-try {
-  if (Platform.OS === 'web') {
-    // Use localStorage for web
-    storageAdapter = {
-      getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
-      setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
-      removeItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
-    };
-    console.log('✅ Supabase: Using localStorage for web');
-  } else if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
-    // Use AsyncStorage for native if available and functional
-    storageAdapter = AsyncStorage;
-    console.log('✅ Supabase: Using AsyncStorage for native');
-  } else {
-    // Fallback to in-memory storage if AsyncStorage is null or not functional
-    console.warn('⚠️ AsyncStorage is null or not functional, falling back to in-memory storage for Supabase client. Sessions will not persist across app restarts.');
-    storageAdapter = new InMemoryStorage();
+// Determine which storage to use based on platform
+const getStorageAdapter = () => {
+  try {
+    if (Platform.OS === 'web') {
+      // Use localStorage for web
+      return {
+        getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+        setItem: (key: string, value: string) => Promise.resolve(localStorage.setItem(key, value)),
+        removeItem: (key: string) => Promise.resolve(localStorage.removeItem(key)),
+      };
+    } else if (AsyncStorage && typeof AsyncStorage.getItem === 'function') {
+      // Use AsyncStorage for native
+      return AsyncStorage;
+    } else {
+      // Fallback to in-memory storage
+      console.warn('⚠️ AsyncStorage not available, using in-memory storage. Sessions will not persist.');
+      return new InMemoryStorage();
+    }
+  } catch (error) {
+    console.warn('⚠️ Error detecting storage adapter:', error);
+    return new InMemoryStorage();
   }
-} catch (error) {
-  // If any error occurs during storage detection, use in-memory storage
-  console.warn('⚠️ Error detecting storage adapter, falling back to in-memory storage:', error);
-  storageAdapter = new InMemoryStorage();
-}
+};
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
-
+// Create and export the Supabase client
 export const supabase = createClient<Database>(
   SUPABASE_URL || '', 
-  SUPABASE_PUBLISHABLE_KEY || '', 
+  SUPABASE_ANON_KEY || '', 
   {
     auth: {
-      storage: storageAdapter,
+      storage: getStorageAdapter(),
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
@@ -79,6 +84,6 @@ export const supabase = createClient<Database>(
   }
 );
 
-console.log('✅ Supabase client initialized with environment variables');
+console.log('✅ Supabase client initialized successfully');
 
 export default supabase;
