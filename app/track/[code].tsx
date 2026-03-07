@@ -80,52 +80,34 @@ export default function PublicTrackingScreen() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  console.log('PublicTrackingScreen: Initializing with tracking code:', code);
+  console.log('PublicTrackingScreen: Tracking code:', code);
 
   const fetchTrackingData = useCallback(async (silent = false) => {
-    if (!code) {
-      console.error('PublicTrackingScreen: No tracking code provided');
-      setError('No tracking code provided');
-      setLoading(false);
-      return;
-    }
-
     if (!silent) {
       setLoading(true);
     }
     setError(null);
 
     try {
-      console.log('PublicTrackingScreen: Fetching tracking data for code:', code);
+      console.log('Fetching tracking data for code:', code);
 
-      // Fetch session data by tracking_code
+      // Fetch session data
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
         .select('*')
         .eq('tracking_code', code)
         .single();
 
-      if (sessionError) {
-        console.error('PublicTrackingScreen: Supabase error fetching session:', sessionError);
-        if (sessionError.code === 'PGRST116') {
-          setError('Tracking session not found. Please check your tracking code.');
-        } else {
-          setError('Failed to load tracking data. Please try again.');
-        }
+      if (sessionError || !session) {
+        console.error('Session not found:', sessionError);
+        setError(t('session_not_found'));
         setLoading(false);
         return;
       }
 
-      if (!session) {
-        console.error('PublicTrackingScreen: No session found for code:', code);
-        setError('Tracking session not found. Please check your tracking code.');
-        setLoading(false);
-        return;
-      }
+      console.log('Session found:', session);
 
-      console.log('PublicTrackingScreen: Session found:', session.id, 'Status:', session.status);
-
-      // Fetch location history for this session
+      // Fetch location history
       const { data: locations, error: locationsError } = await supabase
         .from('locations')
         .select('*')
@@ -134,16 +116,11 @@ export default function PublicTrackingScreen() {
         .limit(50);
 
       if (locationsError) {
-        console.error('PublicTrackingScreen: Error fetching locations:', locationsError);
+        console.error('Error fetching locations:', locationsError);
       }
 
       const locationHistory = locations || [];
       const lastLocation = locationHistory[0];
-
-      console.log('PublicTrackingScreen: Found', locationHistory.length, 'location updates');
-      if (lastLocation) {
-        console.log('PublicTrackingScreen: Last location:', lastLocation.latitude, lastLocation.longitude);
-      }
 
       const data: TrackingData = {
         sessionType: session.mode || 'unknown',
@@ -169,11 +146,11 @@ export default function PublicTrackingScreen() {
         })),
       };
 
-      console.log('PublicTrackingScreen: Tracking data loaded successfully');
+      console.log('Tracking data loaded:', data);
       setTrackingData(data);
     } catch (error) {
-      console.error('PublicTrackingScreen: Exception fetching tracking data:', error);
-      setError('An error occurred while loading tracking data. Please try again.');
+      console.error('Error fetching tracking data:', error);
+      setError(t('error'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -181,7 +158,6 @@ export default function PublicTrackingScreen() {
   }, [code]);
 
   useEffect(() => {
-    console.log('PublicTrackingScreen: Component mounted, fetching initial data');
     fetchTrackingData();
     
     // Set up Supabase Realtime subscription for live updates
@@ -227,12 +203,10 @@ export default function PublicTrackingScreen() {
 
     // Fallback: Auto-refresh every 10 seconds (less frequent since we have realtime)
     const interval = setInterval(() => {
-      console.log('PublicTrackingScreen: Auto-refresh triggered');
       fetchTrackingData(true);
     }, 10000);
 
     return () => {
-      console.log('PublicTrackingScreen: Component unmounting, cleaning up');
       clearInterval(interval);
       if (channel) {
         console.log('PublicTrackingScreen: Unsubscribing from realtime channel');
@@ -287,7 +261,7 @@ export default function PublicTrackingScreen() {
   }, [trackingData?.expiresAt]);
 
   const onRefresh = () => {
-    console.log('PublicTrackingScreen: User pulled to refresh');
+    console.log('User pulled to refresh');
     setRefreshing(true);
     fetchTrackingData();
   };
@@ -441,7 +415,6 @@ export default function PublicTrackingScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>{t('loading_tracking')}</Text>
-          <Text style={styles.loadingSubtext}>Tracking Code: {code}</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -452,10 +425,7 @@ export default function PublicTrackingScreen() {
             color={colors.danger}
           />
           <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorSubtext}>Tracking Code: {code}</Text>
-          <Text style={styles.errorHint}>
-            Please verify the tracking code is correct and the tracking session is still active.
-          </Text>
+          <Text style={styles.errorSubtext}>{t('check_code')}</Text>
         </View>
       ) : trackingData ? (
         <ScrollView
@@ -661,16 +631,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
-    padding: 20,
   },
   loadingText: {
     fontSize: 16,
     color: colors.textSecondary,
-  },
-  loadingSubtext: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   errorContainer: {
     flex: 1,
@@ -689,14 +653,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  errorHint: {
-    fontSize: 14,
-    color: colors.textTertiary,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
   },
   mapContainer: {
     height: 300,
