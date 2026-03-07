@@ -19,83 +19,59 @@ export default function ProfileScreen() {
   console.log('ProfileScreen: Rendering');
 
   useEffect(() => {
-    const initializeProfile = async () => {
-      try {
-        await loadSavedLanguage();
-        await checkUserSession();
-      } catch (error) {
-        console.error('ProfileScreen: Error during initialization:', error);
-      }
-    };
-
-    initializeProfile();
+    loadSavedLanguage();
+    checkUserSession();
   }, []);
 
   const loadSavedLanguage = async () => {
-    try {
-      await loadLanguage();
-      const lang = getCurrentLanguage();
-      setCurrentLanguage(lang);
-      console.log('ProfileScreen: Current language:', lang);
-    } catch (error) {
-      console.error('ProfileScreen: Error loading language:', error);
-      setCurrentLanguage('en');
-    }
+    await loadLanguage();
+    const lang = getCurrentLanguage();
+    setCurrentLanguage(lang);
+    console.log('Current language:', lang);
   };
 
   const checkUserSession = async () => {
     try {
-      console.log('ProfileScreen: Checking user session...');
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('ProfileScreen: Error getting session:', error);
-        setIsLoggedIn(false);
-        setUserEmail(null);
-        return;
-      }
-
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setIsLoggedIn(true);
         setUserEmail(session.user.email || null);
-        console.log('ProfileScreen: User is logged in:', session.user.email);
+        console.log('User is logged in:', session.user.email);
       } else {
         setIsLoggedIn(false);
         setUserEmail(null);
-        console.log('ProfileScreen: User is not logged in');
+        console.log('User is not logged in');
       }
     } catch (error) {
-      console.error('ProfileScreen: Exception checking user session:', error);
-      setIsLoggedIn(false);
-      setUserEmail(null);
+      console.error('Error checking user session:', error);
     }
   };
 
   const handleLogout = async () => {
-    console.log('ProfileScreen: User tapped Logout button');
+    console.log('User tapped Logout button');
     setShowLogoutModal(false);
     
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('ProfileScreen: Logout error:', error);
+        console.error('Logout error:', error);
         Alert.alert('Error', 'Failed to logout. Please try again.');
         return;
       }
       
-      console.log('ProfileScreen: Logout successful');
+      console.log('Logout successful');
       Alert.alert('Success', 'You have been logged out successfully');
       
       // Navigate to welcome screen
       router.replace('/welcome');
     } catch (error) {
-      console.error('ProfileScreen: Logout exception:', error);
+      console.error('Logout exception:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
     }
   };
 
   const handleLogin = () => {
-    console.log('ProfileScreen: User tapped Login button');
+    console.log('User tapped Login button');
     router.push('/login');
   };
 
@@ -106,15 +82,14 @@ export default function ProfileScreen() {
   ];
 
   const handleLanguageSelect = async (languageCode: string) => {
-    console.log('ProfileScreen: User selected language:', languageCode);
-    try {
-      await saveLanguage(languageCode);
-      setCurrentLanguage(languageCode);
-      setShowLanguageModal(false);
-      console.log('ProfileScreen: Language changed successfully');
-    } catch (error) {
-      console.error('ProfileScreen: Error changing language:', error);
-    }
+    console.log('User selected language:', languageCode);
+    await saveLanguage(languageCode);
+    setCurrentLanguage(languageCode);
+    setShowLanguageModal(false);
+    // Force re-render by updating state
+    setTimeout(() => {
+      console.log('Language changed, UI will update');
+    }, 100);
   };
 
   const menuItems = [
@@ -139,7 +114,7 @@ export default function ProfileScreen() {
   ];
 
   const handleMenuPress = (item: any) => {
-    console.log('ProfileScreen: User tapped menu item:', item.id);
+    console.log('User tapped menu item:', item.id);
     if (item.action) {
       item.action();
     } else if (item.route) {
