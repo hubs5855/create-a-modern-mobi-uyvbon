@@ -300,6 +300,29 @@ export default function DeliveryModeScreen() {
 
       console.log('DeliveryModeScreen: Session created successfully:', session.id);
 
+      // Create order record in orders table
+      console.log('DeliveryModeScreen: Creating order record in orders table...');
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          order_id: newOrderId,
+          customer_name: customerName || null,
+          delivery_address: destination.address,
+          delivery_latitude: destination.latitude,
+          delivery_longitude: destination.longitude,
+          delivery_status: 'pending',
+          tracking_session_id: session.id,
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('DeliveryModeScreen: Error creating order:', orderError);
+        // Continue anyway - order creation is not critical for tracking
+      } else {
+        console.log('DeliveryModeScreen: Order created successfully:', orderData.id);
+      }
+
       const batteryLevel = await Battery.getBatteryLevelAsync();
       const batteryPercentage = Math.round(batteryLevel * 100);
 
@@ -392,6 +415,7 @@ export default function DeliveryModeScreen() {
     setDeliveryStatus(newStatus);
 
     try {
+      // Update tracking session
       const { error } = await supabase
         .from('tracking_sessions')
         .update({
@@ -401,9 +425,25 @@ export default function DeliveryModeScreen() {
         .eq('id', sessionId);
 
       if (error) {
-        console.error('DeliveryModeScreen: Error updating delivery status:', error);
+        console.error('DeliveryModeScreen: Error updating delivery status in tracking_sessions:', error);
       } else {
-        console.log('DeliveryModeScreen: Delivery status updated successfully');
+        console.log('DeliveryModeScreen: Delivery status updated successfully in tracking_sessions');
+      }
+
+      // Update order record
+      console.log('DeliveryModeScreen: Updating order delivery status...');
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({
+          delivery_status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('tracking_session_id', sessionId);
+
+      if (orderError) {
+        console.error('DeliveryModeScreen: Error updating delivery status in orders:', orderError);
+      } else {
+        console.log('DeliveryModeScreen: Delivery status updated successfully in orders');
       }
 
       if (newStatus === 'delivered') {

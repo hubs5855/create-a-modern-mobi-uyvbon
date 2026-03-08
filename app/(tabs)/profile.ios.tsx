@@ -119,6 +119,18 @@ export default function ProfileScreen() {
 
   const menuItems = [
     {
+      id: 'orders',
+      title: t('orders'),
+      icon: 'inventory',
+      route: '/orders',
+    },
+    {
+      id: 'favorites',
+      title: t('favorite_locations'),
+      icon: 'star',
+      route: '/favorites',
+    },
+    {
       id: 'language',
       title: t('language'),
       icon: 'language',
@@ -228,6 +240,33 @@ export default function ProfileScreen() {
         )}
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>My Data</Text>
+          {menuItems.slice(0, 2).map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={styles.menuItem}
+              onPress={() => handleMenuPress(item)}
+            >
+              <View style={styles.menuItemLeft}>
+                <IconSymbol
+                  ios_icon_name={item.icon}
+                  android_material_icon_name={item.icon}
+                  size={24}
+                  color={colors.text}
+                />
+                <Text style={styles.menuItemText}>{item.title}</Text>
+              </View>
+              <IconSymbol
+                ios_icon_name="chevron.right"
+                android_material_icon_name="chevron-right"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('language')}</Text>
           <TouchableOpacity
             style={styles.menuItem}
@@ -256,7 +295,7 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('legal')}</Text>
-          {menuItems.slice(1).map((item) => (
+          {menuItems.slice(3).map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.menuItem}

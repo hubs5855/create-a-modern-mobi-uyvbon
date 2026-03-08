@@ -156,6 +156,62 @@ export type Database = {
           updated_at?: string | null
         }
       }
+      orders: {
+        Row: {
+          id: string
+          user_id: string | null
+          order_id: string
+          customer_name: string | null
+          customer_phone: string | null
+          pickup_address: string | null
+          pickup_latitude: number | null
+          pickup_longitude: number | null
+          delivery_address: string
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_status: string
+          tracking_session_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          order_id: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          pickup_address?: string | null
+          pickup_latitude?: number | null
+          pickup_longitude?: number | null
+          delivery_address: string
+          delivery_latitude: number
+          delivery_longitude: number
+          delivery_status?: string
+          tracking_session_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          order_id?: string
+          customer_name?: string | null
+          customer_phone?: string | null
+          pickup_address?: string | null
+          pickup_latitude?: number | null
+          pickup_longitude?: number | null
+          delivery_address?: string
+          delivery_latitude?: number
+          delivery_longitude?: number
+          delivery_status?: string
+          tracking_session_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
