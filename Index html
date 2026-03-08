@@ -1,1 +1,150 @@
 
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    
+    <title>TrackMe LK - Live GPS Tracking</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
+    
+    <style>
+      /* Ensure full height for root elements */
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      
+      /* Fix for Leaflet map container */
+      .leaflet-container {
+        height: 100%;
+        width: 100%;
+        background: #f0f0f0;
+      }
+      
+      /* Ensure Leaflet tiles load properly */
+      .leaflet-tile-container {
+        pointer-events: auto;
+      }
+      
+      /* Fix for Leaflet controls */
+      .leaflet-control-zoom {
+        border: 2px solid rgba(0,0,0,0.2);
+        border-radius: 4px;
+      }
+      
+      /* Loading state */
+      .leaflet-container.leaflet-touch-drag {
+        -ms-touch-action: pinch-zoom;
+        touch-action: pinch-zoom;
+      }
+      
+      /* Prevent white flash on load */
+      body {
+        background-color: #000000;
+      }
+      
+      /* Ensure map is visible */
+      .leaflet-pane,
+      .leaflet-tile,
+      .leaflet-marker-icon,
+      .leaflet-marker-shadow,
+      .leaflet-tile-container,
+      .leaflet-pane > svg,
+      .leaflet-pane > canvas,
+      .leaflet-zoom-box,
+      .leaflet-image-layer,
+      .leaflet-layer {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      
+      .leaflet-container {
+        overflow: hidden;
+      }
+      
+      .leaflet-tile,
+      .leaflet-marker-icon,
+      .leaflet-marker-shadow {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      
+      /* Safari rendering fix */
+      .leaflet-safari .leaflet-tile {
+        image-rendering: -webkit-optimize-contrast;
+      }
+      
+      /* Fix for retina displays */
+      .leaflet-safari .leaflet-tile-container {
+        width: 1600px;
+        height: 1600px;
+        -webkit-transform-origin: 0 0;
+      }
+      
+      .leaflet-marker-icon,
+      .leaflet-marker-shadow {
+        display: block;
+      }
+      
+      /* Ensure tiles are visible */
+      .leaflet-tile {
+        filter: inherit;
+        visibility: inherit;
+      }
+      
+      /* Fix for map not showing */
+      .leaflet-map-pane {
+        z-index: 400;
+      }
+      
+      .leaflet-tile-pane {
+        z-index: 200;
+      }
+      
+      .leaflet-overlay-pane {
+        z-index: 400;
+      }
+      
+      .leaflet-shadow-pane {
+        z-index: 500;
+      }
+      
+      .leaflet-marker-pane {
+        z-index: 600;
+      }
+      
+      .leaflet-tooltip-pane {
+        z-index: 650;
+      }
+      
+      .leaflet-popup-pane {
+        z-index: 700;
+      }
+      
+      .leaflet-control {
+        z-index: 800;
+      }
+      
+      .leaflet-top,
+      .leaflet-bottom {
+        z-index: 1000;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
