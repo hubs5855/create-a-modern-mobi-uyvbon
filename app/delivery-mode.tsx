@@ -316,13 +316,11 @@ export default function DeliveryModeScreen() {
         .from('tracking_sessions')
         .insert({
           user_id: userId,
-          mode: 'delivery',
           session_type: 'delivery',
           status: 'active',
           tracking_code: newTrackingCode,
           order_id: newOrderId,
           customer_name: customerName || null,
-          delivery_address: destination.address,
           delivery_status: 'pending',
           destination_latitude: destination.latitude,
           destination_longitude: destination.longitude,
@@ -377,7 +375,6 @@ export default function DeliveryModeScreen() {
           longitude: location.coords.longitude,
           speed: location.coords.speed ? location.coords.speed * 3.6 : null,
           battery_level: batteryPercentage,
-          timestamp: new Date().toISOString(),
         });
 
       if (locationError) {
@@ -436,7 +433,6 @@ export default function DeliveryModeScreen() {
             longitude: location.coords.longitude,
             speed: speedKmh,
             battery_level: batteryPercentage,
-            timestamp: new Date().toISOString(),
           });
 
         if (error) {

@@ -58,6 +58,7 @@ export default function PersonalSafetyScreen() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
@@ -65,6 +66,7 @@ export default function PersonalSafetyScreen() {
 
   useEffect(() => {
     console.log('PersonalSafetyScreen: Component mounted, initializing...');
+    checkAuth();
     const getBatteryLevel = async () => {
       try {
         const level = await Battery.getBatteryLevelAsync();
@@ -78,6 +80,23 @@ export default function PersonalSafetyScreen() {
     getBatteryLevel();
     fetchFavorites();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        console.log('PersonalSafetyScreen: User not authenticated');
+        setUserId(null);
+      } else {
+        console.log('PersonalSafetyScreen: User authenticated:', user.id);
+        setUserId(user.id);
+      }
+    } catch (error) {
+      console.error('PersonalSafetyScreen: Error checking auth:', error);
+      setUserId(null);
+    }
+  };
 
   // Real-time countdown timer - updates every second
   useEffect(() => {
@@ -186,14 +205,25 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Creating personal safety session in Supabase...');
       console.log('PersonalSafetyScreen: Expiry time:', expiryTime.toISOString());
 
+      // Build the insert object conditionally
+      const insertData: any = {
+        session_type: 'personal_safety',
+        status: 'active',
+        tracking_code: newTrackingCode,
+        expiry_time: expiryTime.toISOString(),
+      };
+
+      // Only add user_id if authenticated
+      if (userId) {
+        insertData.user_id = userId;
+        console.log('PersonalSafetyScreen: Adding user_id to session:', userId);
+      } else {
+        console.log('PersonalSafetyScreen: Creating anonymous session (no user_id)');
+      }
+
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
-        .insert({
-          mode: 'personal_safety',
-          status: 'active',
-          tracking_code: newTrackingCode,
-          expiry_time: expiryTime.toISOString(),
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -219,7 +249,6 @@ export default function PersonalSafetyScreen() {
           longitude: location.coords.longitude,
           speed: location.coords.speed ? location.coords.speed * 3.6 : null,
           battery_level: batteryPercentage,
-          timestamp: new Date().toISOString(),
         });
 
       if (locationError) {
@@ -277,7 +306,6 @@ export default function PersonalSafetyScreen() {
             longitude: location.coords.longitude,
             speed: speedKmh,
             battery_level: batteryPercentage,
-            timestamp: new Date().toISOString(),
           });
 
         if (error) {
@@ -309,17 +337,23 @@ export default function PersonalSafetyScreen() {
     if (sessionId) {
       try {
         console.log('PersonalSafetyScreen: Marking session as stopped in database...');
-        await supabase
+        const updateData: any = {
+          status: 'stopped',
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase
           .from('tracking_sessions')
-          .update({
-            status: 'stopped',
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', sessionId);
         
-        console.log('PersonalSafetyScreen: Session marked as stopped successfully');
+        if (error) {
+          console.error('PersonalSafetyScreen: Error stopping session:', error);
+        } else {
+          console.log('PersonalSafetyScreen: Session marked as stopped successfully');
+        }
       } catch (error) {
-        console.error('PersonalSafetyScreen: Error stopping session:', error);
+        console.error('PersonalSafetyScreen: Exception stopping session:', error);
       }
     }
     
@@ -354,7 +388,6 @@ export default function PersonalSafetyScreen() {
           longitude: location.coords.longitude,
           speed: location.coords.speed ? location.coords.speed * 3.6 : null,
           battery_level: batteryLevel,
-          timestamp: new Date().toISOString(),
         });
 
       console.log('PersonalSafetyScreen: Updating session status to SOS...');
