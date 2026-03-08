@@ -1,12 +1,13 @@
+
 {
   "expo": {
     "name": "TrackMe LK",
-    "slug": "trackmelk",
+    "slug": "trackme-lk",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-ouc.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/app-icon-ouc.png",
       "resizeMode": "contain",
@@ -17,9 +18,9 @@
       "bundleIdentifier": "com.trackmelk.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services. Your location will be shared only when you actively start a tracking session.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background. This is essential for emergency SOS features and delivery tracking.",
-        "NSLocationAlwaysUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background. This enables real-time location updates for personal safety mode and delivery tracking.",
+        "NSLocationWhenInUseUsageDescription": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background.",
         "UIBackgroundModes": [
           "location",
           "fetch"
@@ -31,7 +32,6 @@
         "foregroundImage": "./assets/images/app-icon-ouc.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.trackmelk.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -52,13 +52,10 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services. Your location will be shared only when you actively start a tracking session.",
-          "locationAlwaysPermission": "TrackMe LK needs continuous access to your location to track your journey and ensure your safety even when the app is in the background. This enables real-time location updates for personal safety mode and delivery tracking.",
-          "locationWhenInUsePermission": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services. Your location will be shared only when you actively start a tracking session.",
+          "locationAlwaysAndWhenInUsePermission": "Allow TrackMe LK to use your location for real-time tracking.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -69,8 +66,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "backendUrl": "https://ejc7w5dc44x2t7vwbcmdvj8hnuge43dg.app.specular.dev"
+      "router": {
+        "origin": false
+      }
     }
   }
 }
