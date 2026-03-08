@@ -1,0 +1,6 @@
+
+# Netlify redirects for Expo Router (SPA routing)
+# This ensures all routes work correctly when deployed
+
+# Redirect all routes to index.html for client-side routing
+/*    /index.html   200
