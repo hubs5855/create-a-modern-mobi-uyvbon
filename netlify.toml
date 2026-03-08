@@ -6,8 +6,12 @@
   publish = "dist"
 
 [build.environment]
-  # Node version
-  NODE_VERSION = "18"
+  # Node version for all contexts
+  NODE_VERSION = "20"
+
+[context.production.environment]
+  # Ensure Node 20+ for production builds (supports ES2023 features like Array.prototype.toReversed)
+  NODE_VERSION = "20"
 
 [[redirects]]
   # Handle all routes for client-side routing
