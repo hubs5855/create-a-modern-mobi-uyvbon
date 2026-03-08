@@ -1,4 +1,3 @@
-
 {
   "expo": {
     "name": "TrackMe LK",
@@ -68,7 +67,8 @@
     "extra": {
       "router": {
         "origin": false
-      }
+      },
+      "backendUrl": "https://ejc7w5dc44x2t7vwbcmdvj8hnuge43dg.app.specular.dev"
     }
   }
 }
