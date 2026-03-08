@@ -41,13 +41,49 @@ export default function FavoritesScreen() {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   console.log('FavoritesScreen: Rendering');
 
   useEffect(() => {
-    fetchFavorites();
+    checkAuthAndFetch();
     getCurrentLocation();
   }, []);
+
+  const checkAuthAndFetch = async () => {
+    console.log('FavoritesScreen: Checking authentication...');
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        console.log('FavoritesScreen: User not authenticated, redirecting to login');
+        Alert.alert(
+          'Authentication Required',
+          'Please log in to manage favorite locations',
+          [
+            {
+              text: 'Log In',
+              onPress: () => router.push('/login'),
+            },
+            {
+              text: 'Cancel',
+              onPress: () => router.back(),
+              style: 'cancel',
+            },
+          ]
+        );
+        setLoading(false);
+        return;
+      }
+
+      console.log('FavoritesScreen: User authenticated:', user.id);
+      setUserId(user.id);
+      await fetchFavorites(user.id);
+    } catch (error) {
+      console.error('FavoritesScreen: Error checking auth:', error);
+      setLoading(false);
+    }
+  };
 
   const getCurrentLocation = async () => {
     try {
@@ -66,24 +102,27 @@ export default function FavoritesScreen() {
     }
   };
 
-  const fetchFavorites = async () => {
-    console.log('Fetching favorites from Supabase');
+  const fetchFavorites = async (uid: string) => {
+    console.log('FavoritesScreen: Fetching favorites for user:', uid);
     setLoading(true);
 
     try {
       const { data, error } = await supabase
         .from('favorites')
         .select('*')
+        .eq('user_id', uid)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching favorites:', error);
+        console.error('FavoritesScreen: Error fetching favorites:', error);
+        Alert.alert('Error', 'Failed to load favorites: ' + error.message);
       } else {
-        console.log('Favorites fetched:', data);
+        console.log('FavoritesScreen: Favorites fetched:', data?.length || 0);
         setFavorites(data || []);
       }
     } catch (error) {
-      console.error('Error fetching favorites:', error);
+      console.error('FavoritesScreen: Exception fetching favorites:', error);
+      Alert.alert('Error', 'Failed to load favorites');
     } finally {
       setLoading(false);
     }
@@ -95,7 +134,7 @@ export default function FavoritesScreen() {
       return;
     }
 
-    console.log('User searching for location:', searchQuery);
+    console.log('FavoritesScreen: User searching for location:', searchQuery);
     setSearchLoading(true);
 
     try {
@@ -103,7 +142,7 @@ export default function FavoritesScreen() {
       
       if (results && results.length > 0) {
         const result = results[0];
-        console.log('Search result:', result);
+        console.log('FavoritesScreen: Search result:', result);
         
         setSelectedLocation({
           latitude: result.latitude,
@@ -115,7 +154,7 @@ export default function FavoritesScreen() {
         Alert.alert('Not Found', 'Location not found. Please try a different search term.');
       }
     } catch (error) {
-      console.error('Error searching location:', error);
+      console.error('FavoritesScreen: Error searching location:', error);
       Alert.alert('Error', 'Failed to search location. Please try again.');
     } finally {
       setSearchLoading(false);
@@ -123,12 +162,16 @@ export default function FavoritesScreen() {
   };
 
   const handleMapPress = (latitude: number, longitude: number) => {
-    console.log('User selected location on map:', { latitude, longitude });
+    console.log('FavoritesScreen: User selected location on map:', { latitude, longitude });
     setSelectedLocation({ latitude, longitude });
   };
 
   const handleAddFavorite = () => {
-    console.log('User tapped Add Favorite button');
+    if (!userId) {
+      Alert.alert('Error', 'Please log in to add favorites');
+      return;
+    }
+    console.log('FavoritesScreen: User tapped Add Favorite button');
     setShowAddModal(true);
     setNewLabel('');
     setNewAddress('');
@@ -137,6 +180,11 @@ export default function FavoritesScreen() {
   };
 
   const handleSaveFavorite = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'Please log in to save favorites');
+      return;
+    }
+
     if (!newLabel.trim()) {
       Alert.alert('Error', 'Please enter a label for this location');
       return;
@@ -147,13 +195,15 @@ export default function FavoritesScreen() {
       return;
     }
 
-    console.log('Saving favorite:', { label: newLabel, address: newAddress, location: selectedLocation });
+    console.log('FavoritesScreen: Saving favorite for user:', userId);
+    console.log('FavoritesScreen: Favorite data:', { label: newLabel, address: newAddress, location: selectedLocation });
     setSaving(true);
 
     try {
       const { data, error } = await supabase
         .from('favorites')
         .insert({
+          user_id: userId,
           label: newLabel.trim(),
           address: newAddress.trim() || `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`,
           latitude: selectedLocation.latitude,
@@ -163,24 +213,29 @@ export default function FavoritesScreen() {
         .single();
 
       if (error) {
-        console.error('Error saving favorite:', error);
-        Alert.alert('Error', 'Failed to save favorite location');
+        console.error('FavoritesScreen: Error saving favorite:', error);
+        Alert.alert('Error', 'Failed to save favorite: ' + error.message);
       } else {
-        console.log('Favorite saved:', data);
+        console.log('FavoritesScreen: Favorite saved successfully:', data);
         setFavorites([data, ...favorites]);
         setShowAddModal(false);
         Alert.alert('Success', 'Favorite location saved!');
       }
-    } catch (error) {
-      console.error('Error saving favorite:', error);
-      Alert.alert('Error', 'Failed to save favorite location');
+    } catch (error: any) {
+      console.error('FavoritesScreen: Exception saving favorite:', error);
+      Alert.alert('Error', 'Failed to save favorite: ' + (error.message || 'Unknown error'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteFavorite = async (id: string, label: string) => {
-    console.log('User requested to delete favorite:', id);
+    if (!userId) {
+      Alert.alert('Error', 'Please log in to delete favorites');
+      return;
+    }
+
+    console.log('FavoritesScreen: User requested to delete favorite:', id);
 
     Alert.alert(
       'Delete Favorite',
@@ -191,23 +246,24 @@ export default function FavoritesScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            console.log('Deleting favorite:', id);
+            console.log('FavoritesScreen: Deleting favorite:', id);
             try {
               const { error } = await supabase
                 .from('favorites')
                 .delete()
-                .eq('id', id);
+                .eq('id', id)
+                .eq('user_id', userId);
 
               if (error) {
-                console.error('Error deleting favorite:', error);
-                Alert.alert('Error', 'Failed to delete favorite');
+                console.error('FavoritesScreen: Error deleting favorite:', error);
+                Alert.alert('Error', 'Failed to delete favorite: ' + error.message);
               } else {
-                console.log('Favorite deleted successfully');
+                console.log('FavoritesScreen: Favorite deleted successfully');
                 setFavorites(favorites.filter(f => f.id !== id));
               }
-            } catch (error) {
-              console.error('Error deleting favorite:', error);
-              Alert.alert('Error', 'Failed to delete favorite');
+            } catch (error: any) {
+              console.error('FavoritesScreen: Exception deleting favorite:', error);
+              Alert.alert('Error', 'Failed to delete favorite: ' + (error.message || 'Unknown error'));
             }
           },
         },
@@ -234,6 +290,25 @@ export default function FavoritesScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading favorites...</Text>
+        </View>
+      ) : !userId ? (
+        <View style={styles.emptyState}>
+          <IconSymbol
+            ios_icon_name="person.fill"
+            android_material_icon_name="person"
+            size={64}
+            color={colors.textTertiary}
+          />
+          <Text style={styles.emptyTitle}>Authentication Required</Text>
+          <Text style={styles.emptyDescription}>
+            Please log in to manage your favorite locations.
+          </Text>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.loginButtonText}>Log In</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -457,6 +532,18 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  loginButton: {
+    marginTop: 20,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   favoritesList: {
     gap: 12,

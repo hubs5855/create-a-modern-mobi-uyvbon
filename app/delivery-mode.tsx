@@ -52,15 +52,34 @@ export default function DeliveryModeScreen() {
   const [showTrafficAlert, setShowTrafficAlert] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const locationInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
   useEffect(() => {
-    console.log('DeliveryModeScreen: Component mounted, getting current location...');
+    console.log('DeliveryModeScreen: Component mounted, checking auth and getting location...');
+    checkAuth();
     getCurrentLocation();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error || !user) {
+        console.log('DeliveryModeScreen: User not authenticated');
+        setUserId(null);
+      } else {
+        console.log('DeliveryModeScreen: User authenticated:', user.id);
+        setUserId(user.id);
+      }
+    } catch (error) {
+      console.error('DeliveryModeScreen: Error checking auth:', error);
+      setUserId(null);
+    }
+  };
 
   // Real-time countdown timer - updates every second
   useEffect(() => {
@@ -243,6 +262,26 @@ export default function DeliveryModeScreen() {
       return;
     }
 
+    // Check if user is authenticated
+    if (!userId) {
+      console.log('DeliveryModeScreen: User not authenticated, prompting login');
+      Alert.alert(
+        'Authentication Required',
+        'Please log in to create delivery orders',
+        [
+          {
+            text: 'Log In',
+            onPress: () => router.push('/login'),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -267,7 +306,7 @@ export default function DeliveryModeScreen() {
       // Set expiry time to 8 hours from now for delivery mode
       const expiryTime = new Date(Date.now() + 8 * 60 * 60 * 1000);
 
-      console.log('DeliveryModeScreen: Creating delivery session in Supabase with destination');
+      console.log('DeliveryModeScreen: Creating delivery session in Supabase with user_id:', userId);
       console.log('DeliveryModeScreen: Order ID:', newOrderId);
       console.log('DeliveryModeScreen: Customer Name:', customerName || 'None');
       console.log('DeliveryModeScreen: Destination:', destination);
@@ -276,7 +315,9 @@ export default function DeliveryModeScreen() {
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
         .insert({
+          user_id: userId,
           mode: 'delivery',
+          session_type: 'delivery',
           status: 'active',
           tracking_code: newTrackingCode,
           order_id: newOrderId,
@@ -305,6 +346,7 @@ export default function DeliveryModeScreen() {
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert({
+          user_id: userId,
           order_id: newOrderId,
           customer_name: customerName || null,
           delivery_address: destination.address,
@@ -358,9 +400,9 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Expires At:', expiryTime.toISOString());
 
       startLocationUpdates(session.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('DeliveryModeScreen: Exception starting delivery:', error);
-      Alert.alert('Error', 'Failed to start delivery tracking');
+      Alert.alert('Error', 'Failed to start delivery tracking: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -409,7 +451,7 @@ export default function DeliveryModeScreen() {
   };
 
   const updateDeliveryStatus = async (newStatus: DeliveryStatus) => {
-    if (!sessionId) return;
+    if (!sessionId || !userId) return;
 
     console.log('DeliveryModeScreen: User updated delivery status to:', newStatus);
     setDeliveryStatus(newStatus);
@@ -422,7 +464,8 @@ export default function DeliveryModeScreen() {
           delivery_status: newStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', sessionId);
+        .eq('id', sessionId)
+        .eq('user_id', userId);
 
       if (error) {
         console.error('DeliveryModeScreen: Error updating delivery status in tracking_sessions:', error);
@@ -438,7 +481,8 @@ export default function DeliveryModeScreen() {
           delivery_status: newStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq('tracking_session_id', sessionId);
+        .eq('tracking_session_id', sessionId)
+        .eq('user_id', userId);
 
       if (orderError) {
         console.error('DeliveryModeScreen: Error updating delivery status in orders:', orderError);
@@ -459,7 +503,8 @@ export default function DeliveryModeScreen() {
             status: 'completed',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', sessionId);
+          .eq('id', sessionId)
+          .eq('user_id', userId);
 
         console.log('DeliveryModeScreen: Delivery completed, tracking stopped');
       }
@@ -483,7 +528,7 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Countdown timer stopped');
     }
 
-    if (sessionId) {
+    if (sessionId && userId) {
       try {
         console.log('DeliveryModeScreen: Marking session as stopped in database...');
         await supabase
@@ -492,7 +537,8 @@ export default function DeliveryModeScreen() {
             status: 'stopped',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', sessionId);
+          .eq('id', sessionId)
+          .eq('user_id', userId);
         
         console.log('DeliveryModeScreen: Session marked as stopped successfully');
       } catch (error) {
@@ -632,6 +678,20 @@ export default function DeliveryModeScreen() {
                 Start tracking a delivery. An order ID will be auto-generated.
               </Text>
 
+              {!userId && (
+                <View style={styles.authNotice}>
+                  <IconSymbol
+                    ios_icon_name="info.circle.fill"
+                    android_material_icon_name="info"
+                    size={20}
+                    color={colors.warning}
+                  />
+                  <Text style={styles.authNoticeText}>
+                    You need to log in to create delivery orders
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Customer Name (Optional)</Text>
                 <TextInput
@@ -674,12 +734,12 @@ export default function DeliveryModeScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.startButton, !destination && styles.startButtonDisabled]}
+                style={[styles.startButton, (!destination || !userId) && styles.startButtonDisabled]}
                 onPress={startDelivery}
-                disabled={loading || !destination}
+                disabled={loading || !destination || !userId}
               >
                 <LinearGradient
-                  colors={!destination ? [colors.textTertiary, colors.textTertiary] : [colors.accent, colors.accentDark]}
+                  colors={(!destination || !userId) ? [colors.textTertiary, colors.textTertiary] : [colors.accent, colors.accentDark]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.startButtonGradient}
@@ -1156,6 +1216,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 24,
     lineHeight: 20,
+  },
+  authNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.warning + '20',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    gap: 12,
+  },
+  authNoticeText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
   },
   inputContainer: {
     marginBottom: 20,
