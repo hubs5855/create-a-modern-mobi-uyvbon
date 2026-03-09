@@ -41,11 +41,6 @@ export default function HomeScreen() {
     router.push('/delivery-mode');
   };
 
-  const handleExternalMap = () => {
-    console.log('HomeScreen: User tapped External Map button');
-    router.push('/external-map');
-  };
-
   const handleEmergencySOS = () => {
     console.log('HomeScreen: User tapped Emergency SOS button');
     Alert.alert(
@@ -118,28 +113,6 @@ export default function HomeScreen() {
               </Text>
             </LinearGradient>
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.modeCard} onPress={handleExternalMap}>
-            <LinearGradient
-              colors={['#6366F1', '#4F46E5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.modeGradient}
-            >
-              <View style={styles.modeIcon}>
-                <IconSymbol
-                  ios_icon_name="map.fill"
-                  android_material_icon_name="map"
-                  size={48}
-                  color={colors.text}
-                />
-              </View>
-              <Text style={styles.modeTitle}>External Map Link</Text>
-              <Text style={styles.modeDescription}>
-                Share your custom map with a tracking code
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.featuresCard}>
@@ -152,7 +125,7 @@ export default function HomeScreen() {
                 size={20}
                 color={colors.accent}
               />
-              <Text style={styles.featureText}>Real-time GPS tracking</Text>
+              <Text style={styles.featureText}>Real-time GPS tracking with live map</Text>
             </View>
             <View style={styles.featureItem}>
               <IconSymbol
@@ -180,6 +153,15 @@ export default function HomeScreen() {
                 color={colors.accent}
               />
               <Text style={styles.featureText}>Emergency SOS alerts</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <IconSymbol
+                ios_icon_name="map.fill"
+                android_material_icon_name="map"
+                size={20}
+                color={colors.accent}
+              />
+              <Text style={styles.featureText}>Interactive map with route history</Text>
             </View>
           </View>
         </View>
@@ -282,6 +264,7 @@ const styles = StyleSheet.create({
   featureText: {
     fontSize: 14,
     color: colors.textSecondary,
+    flex: 1,
   },
   sosButton: {
     borderRadius: 16,
