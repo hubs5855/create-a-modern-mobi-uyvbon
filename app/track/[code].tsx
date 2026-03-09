@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Map } from '@/components/Map';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import {
   Platform,
   ActivityIndicator,
   RefreshControl,
+  TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 import { t } from '@/utils/i18n';
+import { WebView } from 'react-native-webview';
 
 interface TrackingData {
   sessionType: string;
@@ -39,6 +42,7 @@ interface TrackingData {
     longitude: number;
     timestamp: string;
   }[];
+  externalMapUrl?: string;
 }
 
 // Helper function to calculate distance between two coordinates (Haversine formula)
@@ -73,6 +77,7 @@ function calculateETA(distance: number, averageSpeed: number): string {
 
 export default function PublicTrackingScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
+  const router = useRouter();
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +128,24 @@ export default function PublicTrackingScreen() {
         return;
       }
 
-      console.log('PublicTrackingScreen: Session found:', session.id, 'Status:', session.status);
+      console.log('PublicTrackingScreen: Session found:', session.id, 'Type:', session.session_type, 'Status:', session.status);
+
+      // Check if this is an external map session
+      if (session.session_type === 'external_map') {
+        console.log('PublicTrackingScreen: External map detected, redirecting to external map viewer');
+        // For external maps, we'll show them inline
+        const data: TrackingData = {
+          sessionType: 'external_map',
+          status: session.status || 'unknown',
+          expiresAt: session.expiry_time || undefined,
+          destinationAddress: session.destination_address || 'External Map',
+          externalMapUrl: session.order_id || '',
+          locationHistory: [],
+        };
+        setTrackingData(data);
+        setLoading(false);
+        return;
+      }
 
       // Fetch location history for this session
       const { data: locations, error: locationsError } = await supabase
@@ -146,7 +168,7 @@ export default function PublicTrackingScreen() {
       }
 
       const data: TrackingData = {
-        sessionType: session.mode || 'unknown',
+        sessionType: session.session_type || 'unknown',
         status: session.status || 'unknown',
         expiresAt: session.expiry_time || undefined,
         orderId: session.order_id || undefined,
@@ -192,11 +214,11 @@ export default function PublicTrackingScreen() {
         // First get the session ID from the tracking code
         const { data: session } = await supabase
           .from('tracking_sessions')
-          .select('id')
+          .select('id, session_type')
           .eq('tracking_code', code)
           .single();
 
-        if (session) {
+        if (session && session.session_type !== 'external_map') {
           console.log('PublicTrackingScreen: Setting up realtime subscription for session:', session.id);
           
           // Subscribe to location updates for this session
@@ -292,6 +314,13 @@ export default function PublicTrackingScreen() {
     fetchTrackingData();
   };
 
+  const handleOpenInBrowser = () => {
+    if (trackingData?.externalMapUrl) {
+      console.log('PublicTrackingScreen: Opening external map in browser:', trackingData.externalMapUrl);
+      Linking.openURL(trackingData.externalMapUrl);
+    }
+  };
+
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -346,6 +375,87 @@ export default function PublicTrackingScreen() {
     }
   };
 
+  // If this is an external map, render the WebView
+  if (trackingData?.sessionType === 'external_map') {
+    const statusColor = getStatusColor(trackingData.status);
+    const countdownText = formatCountdown(timeRemaining);
+
+    return (
+      <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: trackingData.destinationAddress || 'External Map',
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            headerShadowVisible: false,
+          }}
+        />
+        
+        <View style={styles.externalMapInfoBar}>
+          <View style={styles.externalMapInfoItem}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={styles.externalMapInfoText}>{trackingData.status.toUpperCase()}</Text>
+          </View>
+          <View style={styles.externalMapInfoItem}>
+            <IconSymbol
+              ios_icon_name="clock.fill"
+              android_material_icon_name="schedule"
+              size={16}
+              color={timeRemaining && timeRemaining > 0 ? colors.accent : colors.danger}
+            />
+            <Text style={[
+              styles.externalMapInfoText,
+              timeRemaining && timeRemaining <= 0 && { color: colors.danger }
+            ]}>
+              {countdownText}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.externalMapOpenButton} onPress={handleOpenInBrowser}>
+            <IconSymbol
+              ios_icon_name="arrow.up.right.square"
+              android_material_icon_name="open-in-new"
+              size={16}
+              color={colors.accent}
+            />
+            <Text style={styles.externalMapOpenButtonText}>Open</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.externalMapContainer}>
+          {trackingData.externalMapUrl ? (
+            <WebView
+              source={{ uri: trackingData.externalMapUrl }}
+              style={styles.externalMapWebview}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View style={styles.externalMapLoading}>
+                  <ActivityIndicator size="large" color={colors.accent} />
+                  <Text style={styles.externalMapLoadingText}>Loading map...</Text>
+                </View>
+              )}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('PublicTrackingScreen: WebView error:', nativeEvent);
+              }}
+            />
+          ) : (
+            <View style={styles.externalMapError}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={48}
+                color={colors.danger}
+              />
+              <Text style={styles.externalMapErrorText}>No map URL available</Text>
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Original tracking screen code for GPS tracking
   const statusColor = trackingData ? getStatusColor(trackingData.status) : colors.textSecondary;
   const lastUpdateText = trackingData?.lastLocation?.timestamp 
     ? formatTimestamp(trackingData.lastLocation.timestamp)
@@ -849,5 +959,73 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  externalMapInfoBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  externalMapInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  externalMapInfoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  externalMapOpenButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.cardSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  externalMapOpenButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  externalMapContainer: {
+    flex: 1,
+  },
+  externalMapWebview: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  externalMapLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    gap: 12,
+  },
+  externalMapLoadingText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  externalMapError: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    gap: 16,
+  },
+  externalMapErrorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    textAlign: 'center',
   },
 });
