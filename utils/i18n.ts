@@ -1,6 +1,7 @@
 
 import { I18n } from 'i18n-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const translations = {
   en: {
@@ -493,6 +494,13 @@ export const LANGUAGE_STORAGE_KEY = '@trackme_language';
 // Load saved language from AsyncStorage
 export const loadLanguage = async () => {
   try {
+    // Check if AsyncStorage is available (it might not be in Expo Go on some devices)
+    if (!AsyncStorage || typeof AsyncStorage.getItem !== 'function') {
+      console.warn('i18n: AsyncStorage not available, using default language (en)');
+      i18n.locale = 'en';
+      return;
+    }
+
     const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'si' || savedLanguage === 'ta')) {
       i18n.locale = savedLanguage;
@@ -502,6 +510,8 @@ export const loadLanguage = async () => {
     }
   } catch (error) {
     console.error('i18n: Error loading language from storage:', error);
+    console.log('i18n: Falling back to default language (en)');
+    i18n.locale = 'en';
   }
 };
 
@@ -512,11 +522,22 @@ export const saveLanguage = async (language: string) => {
       console.error('i18n: Invalid language code:', language);
       return;
     }
+
+    // Check if AsyncStorage is available
+    if (!AsyncStorage || typeof AsyncStorage.setItem !== 'function') {
+      console.warn('i18n: AsyncStorage not available, only setting language in memory');
+      i18n.locale = language;
+      return;
+    }
+
     await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     i18n.locale = language;
     console.log('i18n: Saved and set language to:', language);
   } catch (error) {
     console.error('i18n: Error saving language to storage:', error);
+    // Still set the language in memory even if storage fails
+    i18n.locale = language;
+    console.log('i18n: Set language to', language, 'in memory only (storage failed)');
   }
 };
 

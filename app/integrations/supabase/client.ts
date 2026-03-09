@@ -13,12 +13,50 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 
 console.log('Supabase client initializing with URL:', SUPABASE_URL);
 
+// Create a safe storage adapter that handles AsyncStorage errors gracefully
+const SafeAsyncStorage = {
+  getItem: async (key: string) => {
+    try {
+      if (!AsyncStorage || typeof AsyncStorage.getItem !== 'function') {
+        console.warn('Supabase: AsyncStorage not available');
+        return null;
+      }
+      return await AsyncStorage.getItem(key);
+    } catch (error) {
+      console.error('Supabase: Error reading from AsyncStorage:', error);
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string) => {
+    try {
+      if (!AsyncStorage || typeof AsyncStorage.setItem !== 'function') {
+        console.warn('Supabase: AsyncStorage not available');
+        return;
+      }
+      await AsyncStorage.setItem(key, value);
+    } catch (error) {
+      console.error('Supabase: Error writing to AsyncStorage:', error);
+    }
+  },
+  removeItem: async (key: string) => {
+    try {
+      if (!AsyncStorage || typeof AsyncStorage.removeItem !== 'function') {
+        console.warn('Supabase: AsyncStorage not available');
+        return;
+      }
+      await AsyncStorage.removeItem(key);
+    } catch (error) {
+      console.error('Supabase: Error removing from AsyncStorage:', error);
+    }
+  },
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: SafeAsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
