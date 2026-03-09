@@ -2,7 +2,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ViewStyle, Text, ActivityIndicator } from 'react-native';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 
 export interface MapMarker {
   id: string;
