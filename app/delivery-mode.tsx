@@ -23,6 +23,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import { Map } from '@/components/Map';
+import {
+  startForegroundLocationTracking,
+  stopForegroundLocationTracking,
+  isLocationTrackingActive,
+} from '@/utils/locationTracking';
 
 type DeliveryStatus = 'pending' | 'on_the_way' | 'delivered';
 
@@ -53,7 +58,6 @@ export default function DeliveryModeScreen() {
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const locationInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
@@ -62,6 +66,7 @@ export default function DeliveryModeScreen() {
     console.log('DeliveryModeScreen: Component mounted, checking auth and getting location...');
     checkAuth();
     getCurrentLocation();
+    checkExistingTracking();
   }, []);
 
   const checkAuth = async () => {
@@ -78,6 +83,20 @@ export default function DeliveryModeScreen() {
     } catch (error) {
       console.error('DeliveryModeScreen: Error checking auth:', error);
       setUserId(null);
+    }
+  };
+
+  const checkExistingTracking = async () => {
+    try {
+      const isActive = await isLocationTrackingActive();
+      console.log('DeliveryModeScreen: Checking existing tracking, active:', isActive);
+      
+      if (isActive) {
+        console.log('DeliveryModeScreen: Found active tracking session');
+        // You could restore the session state here if needed
+      }
+    } catch (error) {
+      console.error('DeliveryModeScreen: Error checking existing tracking:', error);
     }
   };
 
@@ -285,15 +304,6 @@ export default function DeliveryModeScreen() {
     setLoading(true);
 
     try {
-      console.log('DeliveryModeScreen: Requesting location permission...');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('DeliveryModeScreen: Location permission denied');
-        Alert.alert('Permission Required', 'Location permission is required for tracking');
-        setLoading(false);
-        return;
-      }
-
       console.log('DeliveryModeScreen: Getting current location...');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
@@ -396,54 +406,28 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Tracking Code:', newTrackingCode);
       console.log('DeliveryModeScreen: Expires At:', expiryTime.toISOString());
 
-      startLocationUpdates(session.id);
+      // Start foreground location tracking
+      const trackingStarted = await startForegroundLocationTracking(session.id);
+      
+      if (!trackingStarted) {
+        console.error('DeliveryModeScreen: Failed to start foreground location tracking');
+        Alert.alert(
+          'Warning',
+          'Location tracking may not work in the background. Please keep the app open for best results.'
+        );
+      } else {
+        console.log('DeliveryModeScreen: Foreground location tracking started successfully');
+        Alert.alert(
+          'Tracking Started',
+          'Your location will continue to be tracked even when you navigate to Google Maps or other apps.'
+        );
+      }
     } catch (error: any) {
       console.error('DeliveryModeScreen: Exception starting delivery:', error);
       Alert.alert('Error', 'Failed to start delivery tracking: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
-  };
-
-  const startLocationUpdates = (sessionId: string) => {
-    console.log('DeliveryModeScreen: Starting location updates every 5 seconds for session:', sessionId);
-    
-    locationInterval.current = setInterval(async () => {
-      try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        const speedKmh = location.coords.speed ? location.coords.speed * 3.6 : 0;
-        const batteryLevel = await Battery.getBatteryLevelAsync();
-        const batteryPercentage = Math.round(batteryLevel * 100);
-
-        console.log('DeliveryModeScreen: Location update:', {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          speed: speedKmh,
-          battery: batteryPercentage,
-        });
-
-        const { error } = await supabase
-          .from('locations')
-          .insert({
-            session_id: sessionId,
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            speed: speedKmh,
-            battery_level: batteryPercentage,
-          });
-
-        if (error) {
-          console.error('DeliveryModeScreen: Error updating location:', error);
-        } else {
-          console.log('DeliveryModeScreen: Location updated successfully');
-        }
-      } catch (error) {
-        console.error('DeliveryModeScreen: Exception updating location:', error);
-      }
-    }, 5000);
   };
 
   const updateDeliveryStatus = async (newStatus: DeliveryStatus) => {
@@ -488,10 +472,7 @@ export default function DeliveryModeScreen() {
 
       if (newStatus === 'delivered') {
         console.log('DeliveryModeScreen: Delivery marked as delivered, stopping location updates...');
-        if (locationInterval.current) {
-          clearInterval(locationInterval.current);
-          locationInterval.current = null;
-        }
+        await stopForegroundLocationTracking();
 
         await supabase
           .from('tracking_sessions')
@@ -512,11 +493,8 @@ export default function DeliveryModeScreen() {
   const stopDelivery = async () => {
     console.log('DeliveryModeScreen: User tapped Stop Delivery button');
     
-    if (locationInterval.current) {
-      clearInterval(locationInterval.current);
-      locationInterval.current = null;
-      console.log('DeliveryModeScreen: Location updates stopped');
-    }
+    // Stop foreground location tracking
+    await stopForegroundLocationTracking();
 
     if (countdownInterval.current) {
       clearInterval(countdownInterval.current);
@@ -671,7 +649,7 @@ export default function DeliveryModeScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Create Delivery Order</Text>
               <Text style={styles.cardDescription}>
-                Start tracking a delivery. An order ID will be auto-generated.
+                Start tracking a delivery. An order ID will be auto-generated. Location tracking continues even when you navigate to Google Maps.
               </Text>
 
               {!userId && (
@@ -776,7 +754,7 @@ export default function DeliveryModeScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Real-time GPS tracking</Text>
+                  <Text style={styles.featureText}>Continuous GPS tracking</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -785,7 +763,7 @@ export default function DeliveryModeScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Google Maps navigation</Text>
+                  <Text style={styles.featureText}>Works with Google Maps navigation</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -813,7 +791,7 @@ export default function DeliveryModeScreen() {
                   />
                 </View>
                 <Text style={styles.activeTitle}>Delivery Active</Text>
-                <Text style={styles.activeSubtitle}>Tracking in progress</Text>
+                <Text style={styles.activeSubtitle}>Tracking continues in background</Text>
               </View>
 
               <View style={styles.orderInfoCard}>

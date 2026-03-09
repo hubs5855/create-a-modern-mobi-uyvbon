@@ -21,6 +21,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
 import Constants from 'expo-constants';
+import {
+  startForegroundLocationTracking,
+  stopForegroundLocationTracking,
+  isLocationTrackingActive,
+} from '@/utils/locationTracking';
 
 interface Favorite {
   id: string;
@@ -59,7 +64,6 @@ export default function PersonalSafetyScreen() {
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const locationInterval = useRef<NodeJS.Timeout | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
 
   console.log('PersonalSafetyScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
@@ -79,6 +83,7 @@ export default function PersonalSafetyScreen() {
     };
     getBatteryLevel();
     fetchFavorites();
+    checkExistingTracking();
   }, []);
 
   const checkAuth = async () => {
@@ -95,6 +100,20 @@ export default function PersonalSafetyScreen() {
     } catch (error) {
       console.error('PersonalSafetyScreen: Error checking auth:', error);
       setUserId(null);
+    }
+  };
+
+  const checkExistingTracking = async () => {
+    try {
+      const isActive = await isLocationTrackingActive();
+      console.log('PersonalSafetyScreen: Checking existing tracking, active:', isActive);
+      
+      if (isActive) {
+        console.log('PersonalSafetyScreen: Found active tracking session');
+        // You could restore the session state here if needed
+      }
+    } catch (error) {
+      console.error('PersonalSafetyScreen: Error checking existing tracking:', error);
     }
   };
 
@@ -184,15 +203,6 @@ export default function PersonalSafetyScreen() {
     setLoading(true);
 
     try {
-      console.log('PersonalSafetyScreen: Requesting location permission...');
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('PersonalSafetyScreen: Location permission denied');
-        Alert.alert('Permission Required', 'Location permission is required for tracking');
-        setLoading(false);
-        return;
-      }
-
       console.log('PersonalSafetyScreen: Getting current location...');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
@@ -267,7 +277,22 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
       console.log('PersonalSafetyScreen: Expires At:', expiryTime.toISOString());
 
-      startLocationUpdates(session.id);
+      // Start foreground location tracking
+      const trackingStarted = await startForegroundLocationTracking(session.id);
+      
+      if (!trackingStarted) {
+        console.error('PersonalSafetyScreen: Failed to start foreground location tracking');
+        Alert.alert(
+          'Warning',
+          'Location tracking may not work in the background. Please keep the app open for best results.'
+        );
+      } else {
+        console.log('PersonalSafetyScreen: Foreground location tracking started successfully');
+        Alert.alert(
+          'Tracking Started',
+          'Your location will continue to be tracked even when you navigate to other apps or Google Maps.'
+        );
+      }
     } catch (error) {
       console.error('PersonalSafetyScreen: Exception starting tracking:', error);
       Alert.alert('Error', 'Failed to start tracking');
@@ -276,57 +301,11 @@ export default function PersonalSafetyScreen() {
     }
   };
 
-  const startLocationUpdates = (sessionId: string) => {
-    console.log('PersonalSafetyScreen: Starting location updates every 5 seconds for session:', sessionId);
-    
-    locationInterval.current = setInterval(async () => {
-      try {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        const batteryLevelValue = await Battery.getBatteryLevelAsync();
-        const batteryPercentage = Math.round(batteryLevelValue * 100);
-        setBatteryLevel(batteryPercentage);
-
-        const speedKmh = location.coords.speed ? location.coords.speed * 3.6 : 0;
-
-        console.log('PersonalSafetyScreen: Location update:', {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          speed: speedKmh,
-          battery: batteryPercentage,
-        });
-
-        const { error } = await supabase
-          .from('locations')
-          .insert({
-            session_id: sessionId,
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            speed: speedKmh,
-            battery_level: batteryPercentage,
-          });
-
-        if (error) {
-          console.error('PersonalSafetyScreen: Error updating location:', error);
-        } else {
-          console.log('PersonalSafetyScreen: Location updated successfully');
-        }
-      } catch (error) {
-        console.error('PersonalSafetyScreen: Exception updating location:', error);
-      }
-    }, 5000);
-  };
-
   const stopTracking = async () => {
     console.log('PersonalSafetyScreen: User tapped Stop Tracking button');
     
-    if (locationInterval.current) {
-      clearInterval(locationInterval.current);
-      locationInterval.current = null;
-      console.log('PersonalSafetyScreen: Location updates stopped');
-    }
+    // Stop foreground location tracking
+    await stopForegroundLocationTracking();
 
     if (countdownInterval.current) {
       clearInterval(countdownInterval.current);
@@ -509,7 +488,7 @@ export default function PersonalSafetyScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Start Safe Tracking</Text>
               <Text style={styles.cardDescription}>
-                Share your live location with trusted contacts. Choose how long you want to be tracked.
+                Share your live location with trusted contacts. Tracking continues even when you navigate to Google Maps or other apps.
               </Text>
 
               <View style={styles.expiryOptions}>
@@ -636,7 +615,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Live GPS updates every 5 seconds</Text>
+                  <Text style={styles.featureText}>Continuous GPS tracking</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -682,7 +661,7 @@ export default function PersonalSafetyScreen() {
                   />
                 </View>
                 <Text style={styles.activeTitle}>Tracking Active</Text>
-                <Text style={styles.activeSubtitle}>Your location is being shared</Text>
+                <Text style={styles.activeSubtitle}>Continues in background</Text>
               </View>
 
               <View style={styles.trackingCodeCard}>
