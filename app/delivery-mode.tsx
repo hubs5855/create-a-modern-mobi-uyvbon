@@ -29,6 +29,7 @@ import {
   isLocationTrackingActive,
 } from '@/utils/locationTracking';
 import { t } from '@/utils/i18n';
+import { setActiveTrackingSession, clearActiveTrackingSession, getActiveTrackingSession } from '@/utils/trackingSessionManager';
 
 type DeliveryStatus = 'pending' | 'on_the_way' | 'delivered';
 
@@ -89,12 +90,43 @@ export default function DeliveryModeScreen() {
 
   const checkExistingTracking = async () => {
     try {
-      const isActive = await isLocationTrackingActive();
-      console.log('DeliveryModeScreen: Checking existing tracking, active:', isActive);
+      const session = await getActiveTrackingSession();
+      console.log('DeliveryModeScreen: Checking existing tracking session');
       
-      if (isActive) {
-        console.log('DeliveryModeScreen: Found active tracking session');
-        // You could restore the session state here if needed
+      if (session && session.type === 'delivery') {
+        console.log('DeliveryModeScreen: Found active delivery session:', session.id);
+        
+        // Verify session is still active in database
+        const { data, error } = await supabase
+          .from('tracking_sessions')
+          .select('*')
+          .eq('id', session.id)
+          .single();
+
+        if (error) {
+          console.error('DeliveryModeScreen: Error verifying session:', error);
+          await clearActiveTrackingSession();
+        } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
+          console.log('DeliveryModeScreen: Restoring active session from database');
+          setSessionId(data.id);
+          setOrderId(data.order_id || null);
+          setTrackingCode(data.tracking_code);
+          setDeliveryStatus(data.delivery_status || 'pending');
+          setCustomerName(data.customer_name || '');
+          setDeliveryAddress(data.destination_address || '');
+          if (data.destination_latitude && data.destination_longitude) {
+            setDestination({
+              latitude: data.destination_latitude,
+              longitude: data.destination_longitude,
+              address: data.destination_address || '',
+            });
+          }
+          setExpiresAt(data.expiry_time || null);
+          setIsTracking(true);
+        } else {
+          console.log('DeliveryModeScreen: Session is no longer active, clearing');
+          await clearActiveTrackingSession();
+        }
       }
     } catch (error) {
       console.error('DeliveryModeScreen: Error checking existing tracking:', error);
@@ -407,6 +439,15 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Tracking Code:', newTrackingCode);
       console.log('DeliveryModeScreen: Expires At:', expiryTime.toISOString());
 
+      // Save active session to local storage
+      await setActiveTrackingSession({
+        id: session.id,
+        type: 'delivery',
+        trackingCode: newTrackingCode,
+        startedAt: new Date().toISOString(),
+      });
+      console.log('DeliveryModeScreen: Active session saved to local storage');
+
       // Start foreground location tracking
       const trackingStarted = await startForegroundLocationTracking(session.id);
       
@@ -520,6 +561,10 @@ export default function DeliveryModeScreen() {
         console.error('DeliveryModeScreen: Error stopping session:', error);
       }
     }
+
+    // Clear active session from local storage
+    await clearActiveTrackingSession();
+    console.log('DeliveryModeScreen: Active session cleared from local storage');
 
     setIsTracking(false);
     setSessionId(null);

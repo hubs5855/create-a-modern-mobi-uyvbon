@@ -1,18 +1,66 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import * as Location from 'expo-location';
 import { t } from '@/utils/i18n';
+import { getActiveTrackingSession, clearActiveTrackingSession, ActiveSessionInfo } from '@/utils/trackingSessionManager';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [activeSession, setActiveSession] = useState<ActiveSessionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
 
   console.log('HomeScreen: Rendering TrackMe LK home screen (iOS)');
+
+  useEffect(() => {
+    console.log('HomeScreen: Checking for active tracking session...');
+    checkActiveSession();
+  }, []);
+
+  const checkActiveSession = async () => {
+    try {
+      setLoading(true);
+      const session = await getActiveTrackingSession();
+      
+      if (session) {
+        console.log('HomeScreen: Found active session:', session.id, session.type);
+        
+        // Verify session is still active in database
+        const { data, error } = await supabase
+          .from('tracking_sessions')
+          .select('status')
+          .eq('id', session.id)
+          .single();
+
+        if (error) {
+          console.error('HomeScreen: Error verifying session:', error);
+          await clearActiveTrackingSession();
+          setActiveSession(null);
+        } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
+          console.log('HomeScreen: Session is still active in database');
+          setActiveSession(session);
+        } else {
+          console.log('HomeScreen: Session is no longer active, clearing local storage');
+          await clearActiveTrackingSession();
+          setActiveSession(null);
+        }
+      } else {
+        console.log('HomeScreen: No active session found');
+        setActiveSession(null);
+      }
+    } catch (error) {
+      console.error('HomeScreen: Error checking active session:', error);
+      setActiveSession(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePersonalSafety = () => {
     console.log('User tapped Personal Safety Mode button');
@@ -78,6 +126,8 @@ export default function HomeScreen() {
     );
   };
 
+  const sessionTypeText = activeSession?.type === 'delivery' ? t('delivery_mode') : t('personal_safety');
+
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <Stack.Screen
@@ -91,6 +141,53 @@ export default function HomeScreen() {
           <Text style={styles.logo}>{t('home_title')}</Text>
           <Text style={styles.tagline}>{t('home_subtitle')}</Text>
         </View>
+
+        {/* Active Session Card */}
+        {activeSession && (
+          <TouchableOpacity
+            style={styles.activeSessionCard}
+            onPress={() => {
+              console.log('HomeScreen: User tapped active session card');
+              if (activeSession.type === 'delivery') {
+                router.push('/delivery-mode');
+              } else {
+                router.push('/personal-safety');
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={[colors.primary, colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.activeSessionGradient}
+            >
+              <View style={styles.activeSessionHeader}>
+                <View style={styles.pulseIndicator}>
+                  <View style={styles.pulseOuter} />
+                  <View style={styles.pulseInner} />
+                </View>
+                <View style={styles.activeSessionInfo}>
+                  <Text style={styles.activeSessionTitle}>{t('active_tracking_session')}</Text>
+                  <Text style={styles.activeSessionType}>{sessionTypeText}</Text>
+                </View>
+              </View>
+              <View style={styles.activeSessionDetails}>
+                <View style={styles.activeSessionRow}>
+                  <IconSymbol
+                    ios_icon_name="number"
+                    android_material_icon_name="tag"
+                    size={16}
+                    color={colors.text}
+                  />
+                  <Text style={styles.activeSessionLabel}>{t('tracking_code')}:</Text>
+                  <Text style={styles.activeSessionValue}>{activeSession.trackingCode}</Text>
+                </View>
+                <Text style={styles.activeSessionHint}>{t('tap_to_manage')}</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         {/* Emergency SOS Button */}
         <TouchableOpacity
@@ -274,6 +371,87 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     letterSpacing: 2,
     textTransform: 'uppercase',
+  },
+  activeSessionCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  activeSessionGradient: {
+    padding: 20,
+  },
+  activeSessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 16,
+  },
+  pulseIndicator: {
+    position: 'relative',
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseOuter: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accent,
+    opacity: 0.3,
+  },
+  pulseInner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+  },
+  activeSessionInfo: {
+    flex: 1,
+  },
+  activeSessionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  activeSessionType: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.9,
+  },
+  activeSessionDetails: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  activeSessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeSessionLabel: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.9,
+  },
+  activeSessionValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    letterSpacing: 1,
+  },
+  activeSessionHint: {
+    fontSize: 12,
+    color: colors.text,
+    opacity: 0.7,
+    textAlign: 'center',
   },
   sosCard: {
     borderRadius: 20,

@@ -27,6 +27,7 @@ import {
   isLocationTrackingActive,
 } from '@/utils/locationTracking';
 import { t } from '@/utils/i18n';
+import { setActiveTrackingSession, clearActiveTrackingSession, getActiveTrackingSession } from '@/utils/trackingSessionManager';
 
 interface Favorite {
   id: string;
@@ -106,12 +107,32 @@ export default function PersonalSafetyScreen() {
 
   const checkExistingTracking = async () => {
     try {
-      const isActive = await isLocationTrackingActive();
-      console.log('PersonalSafetyScreen: Checking existing tracking, active:', isActive);
+      const session = await getActiveTrackingSession();
+      console.log('PersonalSafetyScreen: Checking existing tracking session');
       
-      if (isActive) {
-        console.log('PersonalSafetyScreen: Found active tracking session');
-        // You could restore the session state here if needed
+      if (session && session.type === 'personal_safety') {
+        console.log('PersonalSafetyScreen: Found active personal safety session:', session.id);
+        
+        // Verify session is still active in database
+        const { data, error } = await supabase
+          .from('tracking_sessions')
+          .select('*')
+          .eq('id', session.id)
+          .single();
+
+        if (error) {
+          console.error('PersonalSafetyScreen: Error verifying session:', error);
+          await clearActiveTrackingSession();
+        } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
+          console.log('PersonalSafetyScreen: Restoring active session from database');
+          setSessionId(data.id);
+          setTrackingCode(data.tracking_code);
+          setExpiresAt(data.expiry_time || null);
+          setIsTracking(true);
+        } else {
+          console.log('PersonalSafetyScreen: Session is no longer active, clearing');
+          await clearActiveTrackingSession();
+        }
       }
     } catch (error) {
       console.error('PersonalSafetyScreen: Error checking existing tracking:', error);
@@ -278,6 +299,15 @@ export default function PersonalSafetyScreen() {
       console.log('PersonalSafetyScreen: Tracking Code:', newTrackingCode);
       console.log('PersonalSafetyScreen: Expires At:', expiryTime.toISOString());
 
+      // Save active session to local storage
+      await setActiveTrackingSession({
+        id: session.id,
+        type: 'personal_safety',
+        trackingCode: newTrackingCode,
+        startedAt: new Date().toISOString(),
+      });
+      console.log('PersonalSafetyScreen: Active session saved to local storage');
+
       // Start foreground location tracking
       const trackingStarted = await startForegroundLocationTracking(session.id);
       
@@ -336,6 +366,10 @@ export default function PersonalSafetyScreen() {
         console.error('PersonalSafetyScreen: Exception stopping session:', error);
       }
     }
+
+    // Clear active session from local storage
+    await clearActiveTrackingSession();
+    console.log('PersonalSafetyScreen: Active session cleared from local storage');
     
     setIsTracking(false);
     setSessionId(null);

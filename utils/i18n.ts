@@ -164,6 +164,16 @@ const translations = {
     ago: 'ago',
     cancelled: 'Cancelled',
     
+    // Active Session Management
+    active_tracking_session: 'Active Tracking Session',
+    tap_to_manage: 'Tap to manage',
+    view_live_tracking: 'View Live Tracking',
+    manage_session: 'Manage Session',
+    complete_session: 'Complete Session',
+    edit_session: 'Edit Session',
+    previous_orders: 'Previous Orders',
+    no_previous_orders: 'No previous orders',
+    
     // Common
     done: 'Done',
     cancel: 'Cancel',
@@ -329,6 +339,16 @@ const translations = {
     ago: 'කට පෙර',
     cancelled: 'අවලංගු කරන ලදී',
     
+    // Active Session Management
+    active_tracking_session: 'සක්‍රීය ලුහුබැඳීමේ සැසිය',
+    tap_to_manage: 'කළමනාකරණය කිරීමට තට්ටු කරන්න',
+    view_live_tracking: 'සජීවී ලුහුබැඳීම බලන්න',
+    manage_session: 'සැසිය කළමනාකරණය කරන්න',
+    complete_session: 'සැසිය සම්පූර්ණ කරන්න',
+    edit_session: 'සැසිය සංස්කරණය කරන්න',
+    previous_orders: 'පෙර ඇණවුම්',
+    no_previous_orders: 'පෙර ඇණවුම් නැත',
+    
     // Common
     done: 'අවසන්',
     cancel: 'අවලංගු කරන්න',
@@ -493,6 +513,16 @@ const translations = {
     days: 'நாட்கள்',
     ago: 'முன்',
     cancelled: 'ரத்து செய்யப்பட்டது',
+    
+    // Active Session Management
+    active_tracking_session: 'செயலில் உள்ள கண்காணிப்பு அமர்வு',
+    tap_to_manage: 'நிர்வகிக்க தட்டவும்',
+    view_live_tracking: 'நேரடி கண்காணிப்பைக் காண்க',
+    manage_session: 'அமர்வை நிர்வகிக்கவும்',
+    complete_session: 'அமர்வை முடிக்கவும்',
+    edit_session: 'அமர்வைத் திருத்தவும்',
+    previous_orders: 'முந்தைய ஆர்டர்கள்',
+    no_previous_orders: 'முந்தைய ஆர்டர்கள் இல்லை',
     
     // Common
     done: 'முடிந்தது',
