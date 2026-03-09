@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
+import { t } from '@/utils/i18n';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -36,9 +37,9 @@ export default function WelcomeScreen() {
 
           {/* Welcome Text */}
           <View style={styles.textContainer}>
-            <Text style={styles.title}>Welcome to TrackMe LK</Text>
+            <Text style={styles.title}>{t('welcome_title')}</Text>
             <Text style={styles.subtitle}>
-              Live GPS tracking for personal safety and delivery services in Sri Lanka
+              {t('welcome_subtitle')}
             </Text>
           </View>
 
@@ -46,19 +47,19 @@ export default function WelcomeScreen() {
           <View style={styles.featuresContainer}>
             <View style={styles.featureItem}>
               <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Real-time GPS tracking</Text>
+              <Text style={styles.featureText}>{t('realtime_gps_tracking')}</Text>
             </View>
             <View style={styles.featureItem}>
               <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Emergency SOS alerts</Text>
+              <Text style={styles.featureText}>{t('emergency_sos_alerts')}</Text>
             </View>
             <View style={styles.featureItem}>
               <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Delivery management</Text>
+              <Text style={styles.featureText}>{t('delivery_management')}</Text>
             </View>
             <View style={styles.featureItem}>
               <View style={styles.featureDot} />
-              <Text style={styles.featureText}>Multi-language support</Text>
+              <Text style={styles.featureText}>{t('multi_language_support')}</Text>
             </View>
           </View>
 
@@ -74,7 +75,7 @@ export default function WelcomeScreen() {
               end={{ x: 1, y: 0 }}
               style={styles.buttonGradient}
             >
-              <Text style={styles.buttonText}>Get Started</Text>
+              <Text style={styles.buttonText}>{t('get_started')}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>

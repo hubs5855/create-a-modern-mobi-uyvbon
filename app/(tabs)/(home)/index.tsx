@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import * as Location from 'expo-location';
+import { t } from '@/utils/i18n';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -87,8 +88,8 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>TrackMe LK</Text>
-          <Text style={styles.tagline}>Live GPS Tracking</Text>
+          <Text style={styles.logo}>{t('home_title')}</Text>
+          <Text style={styles.tagline}>{t('home_subtitle')}</Text>
         </View>
 
         {/* Emergency SOS Button */}
@@ -112,9 +113,9 @@ export default function HomeScreen() {
               />
             </View>
             <View style={styles.sosTextContainer}>
-              <Text style={styles.sosTitle}>Emergency SOS</Text>
+              <Text style={styles.sosTitle}>{t('emergency_sos')}</Text>
               <Text style={styles.sosDescription}>
-                Tap to send your location to emergency contacts
+                {t('emergency_sos_alerts')}
               </Text>
             </View>
           </LinearGradient>
@@ -142,9 +143,9 @@ export default function HomeScreen() {
                   color={colors.text}
                 />
               </View>
-              <Text style={styles.modeTitle}>Personal Safety</Text>
+              <Text style={styles.modeTitle}>{t('personal_safety')}</Text>
               <Text style={styles.modeDescription}>
-                Share your live location with trusted contacts
+                {t('personal_safety_desc')}
               </Text>
               <View style={styles.modeFeatures}>
                 <View style={styles.featureRow}>
@@ -154,7 +155,7 @@ export default function HomeScreen() {
                     size={16}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Live GPS tracking</Text>
+                  <Text style={styles.featureText}>{t('live_gps_updates')}</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <IconSymbol
@@ -163,7 +164,7 @@ export default function HomeScreen() {
                     size={16}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Emergency SOS</Text>
+                  <Text style={styles.featureText}>{t('emergency_sos')}</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <IconSymbol
@@ -172,7 +173,7 @@ export default function HomeScreen() {
                     size={16}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Battery sharing</Text>
+                  <Text style={styles.featureText}>{t('battery_sharing')}</Text>
                 </View>
               </View>
             </LinearGradient>
@@ -198,9 +199,9 @@ export default function HomeScreen() {
                   color={colors.background}
                 />
               </View>
-              <Text style={[styles.modeTitle, { color: colors.background }]}>Delivery Mode</Text>
+              <Text style={[styles.modeTitle, { color: colors.background }]}>{t('delivery_mode')}</Text>
               <Text style={[styles.modeDescription, { color: colors.background }]}>
-                Track deliveries with order management
+                {t('delivery_mode_desc')}
               </Text>
               <View style={styles.modeFeatures}>
                 <View style={styles.featureRow}>
@@ -210,7 +211,7 @@ export default function HomeScreen() {
                     size={16}
                     color={colors.background}
                   />
-                  <Text style={[styles.featureText, { color: colors.background }]}>Auto order ID</Text>
+                  <Text style={[styles.featureText, { color: colors.background }]}>{t('auto_order_id')}</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <IconSymbol
@@ -219,7 +220,7 @@ export default function HomeScreen() {
                     size={16}
                     color={colors.background}
                   />
-                  <Text style={[styles.featureText, { color: colors.background }]}>Live tracking</Text>
+                  <Text style={[styles.featureText, { color: colors.background }]}>{t('realtime_gps')}</Text>
                 </View>
                 <View style={styles.featureRow}>
                   <IconSymbol

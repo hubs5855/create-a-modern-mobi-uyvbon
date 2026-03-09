@@ -26,6 +26,7 @@ import {
   stopForegroundLocationTracking,
   isLocationTrackingActive,
 } from '@/utils/locationTracking';
+import { t } from '@/utils/i18n';
 
 interface Favorite {
   id: string;
@@ -476,7 +477,7 @@ export default function PersonalSafetyScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Personal Safety',
+          title: t('personal_safety_title'),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerShadowVisible: false,
@@ -486,9 +487,9 @@ export default function PersonalSafetyScreen() {
         {!isTracking ? (
           <>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Start Safe Tracking</Text>
+              <Text style={styles.cardTitle}>{t('start_safe_tracking')}</Text>
               <Text style={styles.cardDescription}>
-                Share your live location with trusted contacts. Tracking continues even when you navigate to Google Maps or other apps.
+                {t('safe_tracking_desc')}
               </Text>
 
               <View style={styles.expiryOptions}>
@@ -548,7 +549,7 @@ export default function PersonalSafetyScreen() {
                         size={24}
                         color={colors.text}
                       />
-                      <Text style={styles.startButtonText}>Start Safe Tracking</Text>
+                      <Text style={styles.startButtonText}>{t('start_safe_tracking')}</Text>
                     </>
                   )}
                 </LinearGradient>
@@ -558,9 +559,9 @@ export default function PersonalSafetyScreen() {
             {/* Favorite Locations */}
             <View style={styles.favoritesCard}>
               <View style={styles.favoritesHeader}>
-                <Text style={styles.favoritesTitle}>Favorite Locations</Text>
+                <Text style={styles.favoritesTitle}>{t('favorite_locations')}</Text>
                 <TouchableOpacity onPress={handleManageFavorites}>
-                  <Text style={styles.manageText}>Manage</Text>
+                  <Text style={styles.manageText}>{t('manage')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -568,9 +569,9 @@ export default function PersonalSafetyScreen() {
                 <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: 20 }} />
               ) : favorites.length === 0 ? (
                 <View style={styles.noFavorites}>
-                  <Text style={styles.noFavoritesText}>No favorite locations saved</Text>
+                  <Text style={styles.noFavoritesText}>{t('no_favorites')}</Text>
                   <TouchableOpacity onPress={handleManageFavorites}>
-                    <Text style={styles.addFavoriteLink}>Add your first favorite</Text>
+                    <Text style={styles.addFavoriteLink}>{t('add_first_favorite')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -606,7 +607,7 @@ export default function PersonalSafetyScreen() {
             </View>
 
             <View style={styles.featuresCard}>
-              <Text style={styles.featuresTitle}>Features</Text>
+              <Text style={styles.featuresTitle}>{t('features')}</Text>
               <View style={styles.featuresList}>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -615,7 +616,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Continuous GPS tracking</Text>
+                  <Text style={styles.featureText}>{t('realtime_gps')}</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -624,7 +625,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Battery percentage sharing</Text>
+                  <Text style={styles.featureText}>{t('battery_sharing')}</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -633,7 +634,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Emergency SOS button</Text>
+                  <Text style={styles.featureText}>{t('emergency_sos_feature')}</Text>
                 </View>
                 <View style={styles.featureItem}>
                   <IconSymbol
@@ -642,7 +643,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Auto-expiry timer</Text>
+                  <Text style={styles.featureText}>{t('auto_expiry')}</Text>
                 </View>
               </View>
             </View>
@@ -660,12 +661,12 @@ export default function PersonalSafetyScreen() {
                     color={colors.accent}
                   />
                 </View>
-                <Text style={styles.activeTitle}>Tracking Active</Text>
-                <Text style={styles.activeSubtitle}>Continues in background</Text>
+                <Text style={styles.activeTitle}>{t('tracking_active')}</Text>
+                <Text style={styles.activeSubtitle}>{t('tracking_subtitle')}</Text>
               </View>
 
               <View style={styles.trackingCodeCard}>
-                <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
+                <Text style={styles.trackingCodeLabel}>{t('tracking_code')}</Text>
                 <Text style={styles.trackingCode}>{trackingCode}</Text>
               </View>
 
@@ -677,7 +678,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={timeRemaining && timeRemaining > 0 ? colors.primary : colors.danger}
                   />
-                  <Text style={styles.statLabel}>Time Left</Text>
+                  <Text style={styles.statLabel}>{t('time_left')}</Text>
                   <Text style={[
                     styles.statValue,
                     timeRemaining && timeRemaining <= 0 && { color: colors.danger }
@@ -692,7 +693,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.statLabel}>Battery</Text>
+                  <Text style={styles.statLabel}>{t('battery')}</Text>
                   <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
@@ -705,7 +706,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.text}
                   />
-                  <Text style={styles.shareButtonText}>Share Link</Text>
+                  <Text style={styles.shareButtonText}>{t('share_link')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.whatsappButton} onPress={shareViaWhatsApp}>
                   <IconSymbol
@@ -714,7 +715,7 @@ export default function PersonalSafetyScreen() {
                     size={20}
                     color={colors.background}
                   />
-                  <Text style={styles.whatsappButtonText}>WhatsApp</Text>
+                  <Text style={styles.whatsappButtonText}>{t('whatsapp')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -731,12 +732,12 @@ export default function PersonalSafetyScreen() {
                     size={24}
                     color={colors.text}
                   />
-                  <Text style={styles.sosButtonText}>Emergency SOS</Text>
+                  <Text style={styles.sosButtonText}>{t('emergency_sos')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.stopButton} onPress={stopTracking}>
-                <Text style={styles.stopButtonText}>Stop Tracking</Text>
+                <Text style={styles.stopButtonText}>{t('stop_tracking')}</Text>
               </TouchableOpacity>
             </View>
           </>

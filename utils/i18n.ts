@@ -5,6 +5,15 @@ import { Platform } from 'react-native';
 
 const translations = {
   en: {
+    // Welcome Screen
+    welcome_title: 'Welcome to TrackMe LK',
+    welcome_subtitle: 'Live GPS tracking for personal safety and delivery services in Sri Lanka',
+    get_started: 'Get Started',
+    realtime_gps_tracking: 'Real-time GPS tracking',
+    emergency_sos_alerts: 'Emergency SOS alerts',
+    delivery_management: 'Delivery management',
+    multi_language_support: 'Multi-language support',
+    
     // Auth Screens
     login: 'Login',
     signup: 'Sign Up',
@@ -165,6 +174,15 @@ const translations = {
     select: 'Select',
   },
   si: {
+    // Welcome Screen
+    welcome_title: 'TrackMe LK වෙත සාදරයෙන් පිළිගනිමු',
+    welcome_subtitle: 'ශ්‍රී ලංකාවේ පුද්ගලික ආරක්ෂාව සහ බෙදාහැරීමේ සේවා සඳහා සජීවී GPS ලුහුබැඳීම',
+    get_started: 'ආරම්භ කරන්න',
+    realtime_gps_tracking: 'තත්‍ය කාලීන GPS ලුහුබැඳීම',
+    emergency_sos_alerts: 'හදිසි SOS ඇඟවීම්',
+    delivery_management: 'බෙදාහැරීම් කළමනාකරණය',
+    multi_language_support: 'බහු භාෂා සහාය',
+    
     // Auth Screens
     login: 'පිවිසෙන්න',
     signup: 'ලියාපදිංචි වන්න',
@@ -321,6 +339,15 @@ const translations = {
     select: 'තෝරන්න',
   },
   ta: {
+    // Welcome Screen
+    welcome_title: 'TrackMe LK க்கு வரவேற்கிறோம்',
+    welcome_subtitle: 'இலங்கையில் தனிப்பட்ட பாதுகாப்பு மற்றும் விநியோக சேவைகளுக்கான நேரடி GPS கண்காணிப்பு',
+    get_started: 'தொடங்குங்கள்',
+    realtime_gps_tracking: 'நேரடி GPS கண்காணிப்பு',
+    emergency_sos_alerts: 'அவசர SOS எச்சரிக்கைகள்',
+    delivery_management: 'விநியோக மேலாண்மை',
+    multi_language_support: 'பல மொழி ஆதரவு',
+    
     // Auth Screens
     login: 'உள்நுழைக',
     signup: 'பதிவு செய்க',

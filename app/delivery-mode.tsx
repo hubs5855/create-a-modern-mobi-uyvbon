@@ -28,6 +28,7 @@ import {
   stopForegroundLocationTracking,
   isLocationTrackingActive,
 } from '@/utils/locationTracking';
+import { t } from '@/utils/i18n';
 
 type DeliveryStatus = 'pending' | 'on_the_way' | 'delivered';
 
@@ -637,7 +638,7 @@ export default function DeliveryModeScreen() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Delivery Mode',
+          title: t('delivery_mode_title'),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerShadowVisible: false,
@@ -647,9 +648,9 @@ export default function DeliveryModeScreen() {
         {!isTracking ? (
           <>
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Create Delivery Order</Text>
+              <Text style={styles.cardTitle}>{t('create_delivery_order')}</Text>
               <Text style={styles.cardDescription}>
-                Start tracking a delivery. An order ID will be auto-generated. Location tracking continues even when you navigate to Google Maps.
+                {t('delivery_order_desc')}
               </Text>
 
               {!userId && (
@@ -667,10 +668,10 @@ export default function DeliveryModeScreen() {
               )}
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Customer Name (Optional)</Text>
+                <Text style={styles.inputLabel}>{t('customer_name')}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter customer name"
+                  placeholder={t('enter_customer_name')}
                   placeholderTextColor={colors.textTertiary}
                   value={customerName}
                   onChangeText={(text) => {
@@ -681,7 +682,7 @@ export default function DeliveryModeScreen() {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Destination (Required)</Text>
+                <Text style={styles.inputLabel}>{t('destination_required')}</Text>
                 <TouchableOpacity
                   style={styles.destinationButton}
                   onPress={() => {
@@ -696,7 +697,7 @@ export default function DeliveryModeScreen() {
                     color={destination ? colors.accent : colors.textSecondary}
                   />
                   <Text style={[styles.destinationButtonText, destination && { color: colors.text }]}>
-                    {destination ? destination.address : 'Select destination on map'}
+                    {destination ? destination.address : t('select_destination')}
                   </Text>
                   <IconSymbol
                     ios_icon_name="chevron.right"
@@ -728,7 +729,7 @@ export default function DeliveryModeScreen() {
                         size={24}
                         color={colors.background}
                       />
-                      <Text style={styles.startButtonText}>Start Delivery</Text>
+                      <Text style={styles.startButtonText}>{t('start_delivery')}</Text>
                     </>
                   )}
                 </LinearGradient>
