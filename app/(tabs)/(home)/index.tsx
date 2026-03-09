@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert } from 'react-native';
-import { Stack, useRouter, Link } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert, RefreshControl } from 'react-native';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -15,12 +15,23 @@ export default function HomeScreen() {
   const router = useRouter();
   const [activeSession, setActiveSession] = useState<ActiveSessionInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   console.log('HomeScreen: Rendering TrackMe LK home screen');
 
-  useEffect(() => {
-    console.log('HomeScreen: Checking for active tracking session...');
-    checkActiveSession();
+  // Check for active session when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('HomeScreen: Screen focused, checking for active session...');
+      checkActiveSession();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    console.log('HomeScreen: User pulled to refresh');
+    setRefreshing(true);
+    await checkActiveSession();
+    setRefreshing(false);
   }, []);
 
   const checkActiveSession = async () => {
@@ -34,7 +45,7 @@ export default function HomeScreen() {
         // Verify session is still active in database
         const { data, error } = await supabase
           .from('tracking_sessions')
-          .select('status')
+          .select('status, delivery_status, order_id, customer_name, destination_address')
           .eq('id', session.id)
           .single();
 
@@ -44,7 +55,15 @@ export default function HomeScreen() {
           setActiveSession(null);
         } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
           console.log('HomeScreen: Session is still active in database');
-          setActiveSession(session);
+          // Enrich session info with delivery details
+          const enrichedSession = {
+            ...session,
+            deliveryStatus: data.delivery_status,
+            orderId: data.order_id,
+            customerName: data.customer_name,
+            destinationAddress: data.destination_address,
+          };
+          setActiveSession(enrichedSession as any);
         } else {
           console.log('HomeScreen: Session is no longer active, clearing local storage');
           await clearActiveTrackingSession();
@@ -127,6 +146,7 @@ export default function HomeScreen() {
   };
 
   const sessionTypeText = activeSession?.type === 'delivery' ? t('delivery_mode') : t('personal_safety');
+  const deliveryStatusText = (activeSession as any)?.deliveryStatus || 'pending';
 
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
@@ -135,7 +155,17 @@ export default function HomeScreen() {
           headerShown: false,
         }}
       />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>{t('home_title')}</Text>
@@ -183,6 +213,52 @@ export default function HomeScreen() {
                   <Text style={styles.activeSessionLabel}>{t('tracking_code')}:</Text>
                   <Text style={styles.activeSessionValue}>{activeSession.trackingCode}</Text>
                 </View>
+                {activeSession.type === 'delivery' && (
+                  <>
+                    {(activeSession as any).orderId && (
+                      <View style={styles.activeSessionRow}>
+                        <IconSymbol
+                          ios_icon_name="shippingbox.fill"
+                          android_material_icon_name="local-shipping"
+                          size={16}
+                          color={colors.text}
+                        />
+                        <Text style={styles.activeSessionLabel}>Order ID:</Text>
+                        <Text style={styles.activeSessionValue}>{(activeSession as any).orderId}</Text>
+                      </View>
+                    )}
+                    {(activeSession as any).customerName && (
+                      <View style={styles.activeSessionRow}>
+                        <IconSymbol
+                          ios_icon_name="person.fill"
+                          android_material_icon_name="person"
+                          size={16}
+                          color={colors.text}
+                        />
+                        <Text style={styles.activeSessionLabel}>Customer:</Text>
+                        <Text style={styles.activeSessionValue}>{(activeSession as any).customerName}</Text>
+                      </View>
+                    )}
+                    <View style={styles.activeSessionRow}>
+                      <IconSymbol
+                        ios_icon_name="circle.fill"
+                        android_material_icon_name="circle"
+                        size={12}
+                        color={
+                          deliveryStatusText === 'delivered' ? colors.success :
+                          deliveryStatusText === 'on_the_way' ? colors.primary :
+                          colors.warning
+                        }
+                      />
+                      <Text style={styles.activeSessionLabel}>Status:</Text>
+                      <Text style={styles.activeSessionValue}>
+                        {deliveryStatusText === 'delivered' ? 'Delivered' :
+                         deliveryStatusText === 'on_the_way' ? 'On the Way' :
+                         'Pending'}
+                      </Text>
+                    </View>
+                  </>
+                )}
                 <Text style={styles.activeSessionHint}>{t('tap_to_manage')}</Text>
               </View>
             </LinearGradient>
@@ -453,6 +529,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     opacity: 0.7,
     textAlign: 'center',
+    marginTop: 4,
   },
   sosCard: {
     borderRadius: 20,

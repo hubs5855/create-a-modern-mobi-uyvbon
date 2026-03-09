@@ -3,32 +3,24 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '@/app/integrations/supabase/client';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { t, saveLanguage, getCurrentLanguage, loadLanguage } from '@/utils/i18n';
-import { supabase } from '@/app/integrations/supabase/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [currentLanguage, setCurrentLanguage] = useState('en');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState('en');
 
   console.log('ProfileScreen: Rendering');
 
   useEffect(() => {
-    const initializeProfile = async () => {
-      try {
-        await loadSavedLanguage();
-        await checkUserSession();
-      } catch (error) {
-        console.error('ProfileScreen: Error during initialization:', error);
-      }
-    };
-
-    initializeProfile();
+    loadSavedLanguage();
+    checkUserSession();
   }, []);
 
   const loadSavedLanguage = async () => {
@@ -39,33 +31,29 @@ export default function ProfileScreen() {
       console.log('ProfileScreen: Current language:', lang);
     } catch (error) {
       console.error('ProfileScreen: Error loading language:', error);
-      setCurrentLanguage('en');
     }
   };
 
   const checkUserSession = async () => {
     try {
       console.log('ProfileScreen: Checking user session...');
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { user }, error } = await supabase.auth.getUser();
       
       if (error) {
-        console.error('ProfileScreen: Error getting session:', error);
+        console.error('ProfileScreen: Error checking session:', error);
         setIsLoggedIn(false);
         setUserEmail(null);
-        return;
-      }
-
-      if (session?.user) {
+      } else if (user) {
+        console.log('ProfileScreen: User is logged in:', user.email);
         setIsLoggedIn(true);
-        setUserEmail(session.user.email || null);
-        console.log('ProfileScreen: User is logged in:', session.user.email);
+        setUserEmail(user.email || null);
       } else {
+        console.log('ProfileScreen: No user session found');
         setIsLoggedIn(false);
         setUserEmail(null);
-        console.log('ProfileScreen: User is not logged in');
       }
     } catch (error) {
-      console.error('ProfileScreen: Exception checking user session:', error);
+      console.error('ProfileScreen: Exception checking session:', error);
       setIsLoggedIn(false);
       setUserEmail(null);
     }
@@ -73,25 +61,35 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     console.log('ProfileScreen: User tapped Logout button');
-    setShowLogoutModal(false);
     
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('ProfileScreen: Logout error:', error);
-        Alert.alert('Error', 'Failed to logout. Please try again.');
-        return;
-      }
-      
-      console.log('ProfileScreen: Logout successful');
-      Alert.alert('Success', 'You have been logged out successfully');
-      
-      // Navigate to welcome screen
-      router.replace('/welcome');
-    } catch (error) {
-      console.error('ProfileScreen: Logout exception:', error);
-      Alert.alert('Error', 'Failed to logout. Please try again.');
-    }
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('Logout cancelled'),
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('ProfileScreen: Logging out...');
+              await supabase.auth.signOut();
+              setIsLoggedIn(false);
+              setUserEmail(null);
+              console.log('ProfileScreen: Logout successful');
+              Alert.alert('Success', 'You have been logged out');
+            } catch (error) {
+              console.error('ProfileScreen: Error logging out:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLogin = () => {
@@ -99,161 +97,171 @@ export default function ProfileScreen() {
     router.push('/login');
   };
 
-  const languages = [
-    { code: 'en', name: 'English', nativeName: 'English' },
-    { code: 'si', name: 'Sinhala', nativeName: 'සිංහල' },
-    { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
-  ];
-
   const handleLanguageSelect = async (languageCode: string) => {
     console.log('ProfileScreen: User selected language:', languageCode);
     try {
       await saveLanguage(languageCode);
       setCurrentLanguage(languageCode);
       setShowLanguageModal(false);
-      console.log('ProfileScreen: Language changed successfully');
+      console.log('ProfileScreen: Language saved successfully');
+      Alert.alert('Success', 'Language changed successfully. Please restart the app for full effect.');
     } catch (error) {
-      console.error('ProfileScreen: Error changing language:', error);
+      console.error('ProfileScreen: Error saving language:', error);
+      Alert.alert('Error', 'Failed to change language');
     }
+  };
+
+  const handleMenuPress = (item: any) => {
+    console.log('ProfileScreen: User tapped menu item:', item.title);
+    
+    if (item.route) {
+      router.push(item.route);
+    } else if (item.action === 'language') {
+      setShowLanguageModal(true);
+    } else if (item.action === 'clearCache') {
+      handleClearCache();
+    }
+  };
+
+  const handleClearCache = async () => {
+    console.log('ProfileScreen: User tapped Clear Cache button');
+    
+    Alert.alert(
+      'Clear Cache',
+      'This will clear all cached data and improve app performance. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('Clear cache cancelled'),
+        },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('ProfileScreen: Clearing cache...');
+              
+              // Clear AsyncStorage except for language and active session
+              const keys = await AsyncStorage.getAllKeys();
+              const keysToRemove = keys.filter(
+                key => !key.includes('language') && !key.includes('active_session')
+              );
+              
+              if (keysToRemove.length > 0) {
+                await AsyncStorage.multiRemove(keysToRemove);
+                console.log('ProfileScreen: Cleared', keysToRemove.length, 'cache items');
+              }
+              
+              Alert.alert('Success', 'Cache cleared successfully. App performance should improve.');
+            } catch (error) {
+              console.error('ProfileScreen: Error clearing cache:', error);
+              Alert.alert('Error', 'Failed to clear cache. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const menuItems = [
     {
-      id: 'orders',
       title: t('orders'),
-      icon: 'inventory',
+      icon: 'local-shipping',
+      iosIcon: 'shippingbox.fill',
       route: '/orders',
     },
     {
-      id: 'favorites',
       title: t('favorite_locations'),
       icon: 'star',
+      iosIcon: 'star.fill',
       route: '/favorites',
     },
     {
-      id: 'language',
       title: t('language'),
       icon: 'language',
-      action: () => setShowLanguageModal(true),
+      iosIcon: 'globe',
+      action: 'language',
     },
     {
-      id: 'privacy',
+      title: 'Clear Cache',
+      icon: 'delete',
+      iosIcon: 'trash.fill',
+      action: 'clearCache',
+    },
+    {
       title: t('privacy_policy'),
       icon: 'security',
+      iosIcon: 'lock.shield.fill',
       route: '/privacy-policy',
     },
     {
-      id: 'terms',
       title: t('terms_of_service'),
       icon: 'description',
+      iosIcon: 'doc.text.fill',
       route: '/terms-of-service',
     },
   ];
 
-  const handleMenuPress = (item: any) => {
-    console.log('ProfileScreen: User tapped menu item:', item.id);
-    if (item.action) {
-      item.action();
-    } else if (item.route) {
-      router.push(item.route as any);
-    }
-  };
-
-  const selectedLanguage = languages.find(lang => lang.code === currentLanguage);
-  const selectedLanguageName = selectedLanguage?.nativeName || 'English';
+  const languageOptions = [
+    { code: 'en', name: 'English', nativeName: 'English' },
+    { code: 'si', name: 'Sinhala', nativeName: 'සිංහල' },
+    { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
+  ];
 
   return (
     <SafeAreaView style={[commonStyles.container, { paddingTop: Platform.OS === 'android' ? 48 : 0 }]} edges={['top']}>
       <Stack.Screen
         options={{
-          headerShown: true,
-          title: t('settings'),
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerShadowVisible: false,
+          headerShown: false,
         }}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <View style={styles.iconContainer}>
+        {/* Profile Header */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
             <IconSymbol
-              ios_icon_name="person.circle.fill"
-              android_material_icon_name="account-circle"
-              size={80}
-              color={colors.accent}
+              ios_icon_name="person.fill"
+              android_material_icon_name="person"
+              size={48}
+              color={colors.text}
             />
           </View>
-          <Text style={styles.appName}>{t('app_name')}</Text>
-          {isLoggedIn && userEmail && (
-            <Text style={styles.userEmail}>{userEmail}</Text>
+          {isLoggedIn ? (
+            <>
+              <Text style={styles.userName}>{userEmail}</Text>
+              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Text style={styles.logoutButtonText}>{t('logout')}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.userName}>{t('guest_user')}</Text>
+              <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                <Text style={styles.loginButtonText}>{t('login')}</Text>
+              </TouchableOpacity>
+            </>
           )}
-          <Text style={styles.appVersion}>{t('version')}</Text>
         </View>
 
-        {/* Login/Logout Section */}
-        {isLoggedIn ? (
-          <View style={styles.section}>
+        {/* Menu Items */}
+        <View style={styles.menuSection}>
+          {menuItems.map((item, index) => (
             <TouchableOpacity
-              style={[styles.menuItem, styles.logoutButton]}
-              onPress={() => setShowLogoutModal(true)}
-            >
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="arrow.right.square.fill"
-                  android_material_icon_name="logout"
-                  size={24}
-                  color={colors.error}
-                />
-                <Text style={[styles.menuItemText, styles.logoutText]}>Logout</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.error}
-              />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={[styles.menuItem, styles.loginButton]}
-              onPress={handleLogin}
-            >
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name="arrow.right.square.fill"
-                  android_material_icon_name="login"
-                  size={24}
-                  color={colors.accent}
-                />
-                <Text style={[styles.menuItemText, styles.loginText]}>Login</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.accent}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Data</Text>
-          {menuItems.slice(0, 2).map((item) => (
-            <TouchableOpacity
-              key={item.id}
+              key={index}
               style={styles.menuItem}
               onPress={() => handleMenuPress(item)}
+              activeOpacity={0.7}
             >
               <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name={item.icon}
-                  android_material_icon_name={item.icon}
-                  size={24}
-                  color={colors.text}
-                />
+                <View style={styles.menuIconContainer}>
+                  <IconSymbol
+                    ios_icon_name={item.iosIcon}
+                    android_material_icon_name={item.icon}
+                    size={24}
+                    color={colors.accent}
+                  />
+                </View>
                 <Text style={styles.menuItemText}>{item.title}</Text>
               </View>
               <IconSymbol
@@ -266,64 +274,10 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('language')}</Text>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowLanguageModal(true)}
-          >
-            <View style={styles.menuItemLeft}>
-              <IconSymbol
-                ios_icon_name="language"
-                android_material_icon_name="language"
-                size={24}
-                color={colors.text}
-              />
-              <Text style={styles.menuItemText}>{t('select_language')}</Text>
-            </View>
-            <View style={styles.languageValue}>
-              <Text style={styles.languageValueText}>{selectedLanguageName}</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('legal')}</Text>
-          {menuItems.slice(3).map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={() => handleMenuPress(item)}
-            >
-              <View style={styles.menuItemLeft}>
-                <IconSymbol
-                  ios_icon_name={item.icon}
-                  android_material_icon_name={item.icon}
-                  size={24}
-                  color={colors.text}
-                />
-                <Text style={styles.menuItemText}>{item.title}</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="chevron-right"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {t('app_description')}
-          </Text>
+        {/* App Info */}
+        <View style={styles.appInfo}>
+          <Text style={styles.appInfoText}>TrackMe LK v1.0.0</Text>
+          <Text style={styles.appInfoText}>© 2024 TrackMe LK. All rights reserved.</Text>
         </View>
       </ScrollView>
 
@@ -333,7 +287,10 @@ export default function ProfileScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         transparent={false}
-        onRequestClose={() => setShowLanguageModal(false)}
+        onRequestClose={() => {
+          console.log('ProfileScreen: User closed language modal');
+          setShowLanguageModal(false);
+        }}
       >
         <SafeAreaView style={styles.modalContainer} edges={['top']}>
           <View style={styles.modalHeader}>
@@ -349,63 +306,32 @@ export default function ProfileScreen() {
             <View style={{ width: 24 }} />
           </View>
 
-          <View style={styles.languageList}>
-            {languages.map((language) => {
-              const isSelected = language.code === currentLanguage;
-              return (
-                <TouchableOpacity
-                  key={language.code}
-                  style={[styles.languageItem, isSelected && styles.languageItemSelected]}
-                  onPress={() => handleLanguageSelect(language.code)}
-                >
-                  <View style={styles.languageItemLeft}>
-                    <Text style={styles.languageName}>{language.name}</Text>
-                    <Text style={styles.languageNativeName}>{language.nativeName}</Text>
-                  </View>
-                  {isSelected && (
-                    <IconSymbol
-                      ios_icon_name="checkmark.circle.fill"
-                      android_material_icon_name="check-circle"
-                      size={24}
-                      color={colors.accent}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+          <View style={styles.languageOptions}>
+            {languageOptions.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.languageOption,
+                  currentLanguage === lang.code && styles.languageOptionActive,
+                ]}
+                onPress={() => handleLanguageSelect(lang.code)}
+              >
+                <View style={styles.languageInfo}>
+                  <Text style={styles.languageName}>{lang.name}</Text>
+                  <Text style={styles.languageNativeName}>{lang.nativeName}</Text>
+                </View>
+                {currentLanguage === lang.code && (
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={24}
+                    color={colors.accent}
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
           </View>
         </SafeAreaView>
-      </Modal>
-
-      {/* Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowLogoutModal(false)}
-      >
-        <View style={styles.logoutModalOverlay}>
-          <View style={styles.logoutModalContent}>
-            <Text style={styles.logoutModalTitle}>Logout</Text>
-            <Text style={styles.logoutModalMessage}>
-              Are you sure you want to logout?
-            </Text>
-            <View style={styles.logoutModalButtons}>
-              <TouchableOpacity
-                style={[styles.logoutModalButton, styles.logoutModalCancelButton]}
-                onPress={() => setShowLogoutModal(false)}
-              >
-                <Text style={styles.logoutModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.logoutModalButton, styles.logoutModalConfirmButton]}
-                onPress={handleLogout}
-              >
-                <Text style={styles.logoutModalConfirmText}>Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -416,97 +342,94 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  header: {
+  profileHeader: {
     alignItems: 'center',
     marginBottom: 32,
     paddingVertical: 24,
   },
-  iconContainer: {
+  avatarContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  appVersion: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  loginButton: {
+    borderWidth: 2,
     borderColor: colors.accent,
   },
-  loginText: {
-    color: colors.accent,
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  loginButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   logoutButton: {
-    borderColor: colors.error,
+    backgroundColor: colors.cardSecondary,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  logoutText: {
-    color: colors.error,
-  },
-  sectionTitle: {
+  logoutButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
-    marginBottom: 12,
-    marginLeft: 4,
+  },
+  menuSection: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    flex: 1,
+    gap: 16,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.cardSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuItemText: {
     fontSize: 16,
     color: colors.text,
     fontWeight: '500',
   },
-  languageValue: {
-    flexDirection: 'row',
+  appInfo: {
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 20,
   },
-  languageValueText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  footer: {
-    marginTop: 32,
-    padding: 20,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  footerText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
+  appInfoText: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginBottom: 4,
   },
   modalContainer: {
     flex: 1,
@@ -525,25 +448,25 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
-  languageList: {
+  languageOptions: {
     padding: 20,
-    gap: 12,
   },
-  languageItem: {
+  languageOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 20,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  languageItemSelected: {
+  languageOptionActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.cardSecondary,
+    backgroundColor: colors.accent + '10',
   },
-  languageItemLeft: {
+  languageInfo: {
     flex: 1,
   },
   languageName: {
@@ -555,63 +478,5 @@ const styles = StyleSheet.create({
   languageNativeName: {
     fontSize: 14,
     color: colors.textSecondary,
-  },
-  logoutModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  logoutModalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logoutModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  logoutModalMessage: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  logoutModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  logoutModalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  logoutModalCancelButton: {
-    backgroundColor: colors.cardSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logoutModalConfirmButton: {
-    backgroundColor: colors.error,
-  },
-  logoutModalCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  logoutModalConfirmText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
   },
 });
