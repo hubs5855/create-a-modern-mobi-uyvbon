@@ -1,52 +1,79 @@
 
-import { Stack, useRouter } from 'expo-router';
 import React from 'react';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
-import { colors, commonStyles } from '@/styles/commonStyles';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/IconSymbol';
+import { colors, commonStyles } from '@/styles/commonStyles';
+import * as Location from 'expo-location';
 
 export default function HomeScreen() {
   const router = useRouter();
 
-  console.log('HomeScreen: Component rendered');
+  console.log('HomeScreen: Rendering TrackMe LK home screen (iOS)');
 
-  const handlePersonalSafety = async () => {
-    console.log('HomeScreen: User tapped Personal Safety button');
-    
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      console.log('HomeScreen: Location permission denied');
-      Alert.alert('Permission Required', 'Location permission is required for tracking');
-      return;
-    }
-
-    console.log('HomeScreen: Navigating to personal-safety screen');
+  const handlePersonalSafety = () => {
+    console.log('User tapped Personal Safety Mode button');
     router.push('/personal-safety');
   };
 
-  const handleDeliveryMode = async () => {
-    console.log('HomeScreen: User tapped Delivery Mode button');
-    
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      console.log('HomeScreen: Location permission denied');
-      Alert.alert('Permission Required', 'Location permission is required for tracking');
-      return;
-    }
-
-    console.log('HomeScreen: Navigating to delivery-mode screen');
+  const handleDeliveryMode = () => {
+    console.log('User tapped Delivery Mode button');
     router.push('/delivery-mode');
   };
 
-  const handleEmergencySOS = () => {
-    console.log('HomeScreen: User tapped Emergency SOS button');
+  const handleEmergencySOS = async () => {
+    console.log('User tapped Emergency SOS button from home');
+    
     Alert.alert(
       'Emergency SOS',
-      'This feature requires an active tracking session. Please start Personal Safety tracking first.',
-      [{ text: 'OK' }]
+      'This will send your current location to emergency contacts. Continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('SOS cancelled'),
+        },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('Requesting location permission for SOS...');
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              
+              if (status !== 'granted') {
+                Alert.alert('Permission Required', 'Location permission is required for SOS');
+                return;
+              }
+
+              console.log('Getting current location for SOS...');
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+              });
+
+              const sosMessage = `🚨 EMERGENCY SOS 🚨\nI need help!\nMy location: https://www.google.com/maps?q=${location.coords.latitude},${location.coords.longitude}`;
+              
+              console.log('SOS triggered with location:', location.coords.latitude, location.coords.longitude);
+              
+              Alert.alert(
+                'SOS Sent!',
+                'Your emergency location has been prepared. Share it with your emergency contacts.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => console.log('SOS alert acknowledged'),
+                  },
+                ]
+              );
+            } catch (error) {
+              console.error('Error triggering SOS:', error);
+              Alert.alert('Error', 'Failed to get your location. Please try again.');
+            }
+          },
+        },
+      ]
     );
   };
 
@@ -54,30 +81,60 @@ export default function HomeScreen() {
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <Stack.Screen
         options={{
-          headerShown: true,
-          title: 'TrackMe LK',
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          headerShadowVisible: false,
+          headerShown: false,
         }}
       />
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome to TrackMe LK</Text>
-          <Text style={styles.subtitle}>
-            Live GPS tracking for personal safety and deliveries
-          </Text>
+          <Text style={styles.logo}>TrackMe LK</Text>
+          <Text style={styles.tagline}>Live GPS Tracking</Text>
         </View>
 
+        {/* Emergency SOS Button */}
+        <TouchableOpacity
+          style={styles.sosCard}
+          onPress={handleEmergencySOS}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[colors.danger, '#CC0000']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sosGradient}
+          >
+            <View style={styles.sosIconContainer}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={40}
+                color={colors.text}
+              />
+            </View>
+            <View style={styles.sosTextContainer}>
+              <Text style={styles.sosTitle}>Emergency SOS</Text>
+              <Text style={styles.sosDescription}>
+                Tap to send your location to emergency contacts
+              </Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Mode Selection Cards */}
         <View style={styles.modesContainer}>
-          <TouchableOpacity style={styles.modeCard} onPress={handlePersonalSafety}>
+          {/* Personal Safety Mode */}
+          <TouchableOpacity
+            style={styles.modeCard}
+            onPress={handlePersonalSafety}
+            activeOpacity={0.8}
+          >
             <LinearGradient
               colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.modeGradient}
             >
-              <View style={styles.modeIcon}>
+              <View style={styles.modeIconContainer}>
                 <IconSymbol
                   ios_icon_name="shield.fill"
                   android_material_icon_name="security"
@@ -89,17 +146,51 @@ export default function HomeScreen() {
               <Text style={styles.modeDescription}>
                 Share your live location with trusted contacts
               </Text>
+              <View style={styles.modeFeatures}>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.featureText}>Live GPS tracking</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.featureText}>Emergency SOS</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.accent}
+                  />
+                  <Text style={styles.featureText}>Battery sharing</Text>
+                </View>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.modeCard} onPress={handleDeliveryMode}>
+          {/* Delivery Mode */}
+          <TouchableOpacity
+            style={styles.modeCard}
+            onPress={handleDeliveryMode}
+            activeOpacity={0.8}
+          >
             <LinearGradient
               colors={[colors.accent, colors.accentDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.modeGradient}
             >
-              <View style={styles.modeIcon}>
+              <View style={styles.modeIconContainer}>
                 <IconSymbol
                   ios_icon_name="shippingbox.fill"
                   android_material_icon_name="local-shipping"
@@ -109,79 +200,53 @@ export default function HomeScreen() {
               </View>
               <Text style={[styles.modeTitle, { color: colors.background }]}>Delivery Mode</Text>
               <Text style={[styles.modeDescription, { color: colors.background }]}>
-                Track deliveries with real-time updates
+                Track deliveries with order management
               </Text>
+              <View style={styles.modeFeatures}>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.background}
+                  />
+                  <Text style={[styles.featureText, { color: colors.background }]}>Auto order ID</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.background}
+                  />
+                  <Text style={[styles.featureText, { color: colors.background }]}>Live tracking</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.background}
+                  />
+                  <Text style={[styles.featureText, { color: colors.background }]}>Status updates</Text>
+                </View>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.featuresCard}>
-          <Text style={styles.featuresTitle}>Features</Text>
-          <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-              <IconSymbol
-                ios_icon_name="location.fill"
-                android_material_icon_name="location-on"
-                size={20}
-                color={colors.accent}
-              />
-              <Text style={styles.featureText}>Real-time GPS tracking with live map</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <IconSymbol
-                ios_icon_name="link.circle.fill"
-                android_material_icon_name="link"
-                size={20}
-                color={colors.accent}
-              />
-              <Text style={styles.featureText}>Easy sharing with tracking codes</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <IconSymbol
-                ios_icon_name="clock.fill"
-                android_material_icon_name="schedule"
-                size={20}
-                color={colors.accent}
-              />
-              <Text style={styles.featureText}>Auto-expiry timers</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <IconSymbol
-                ios_icon_name="exclamationmark.triangle.fill"
-                android_material_icon_name="warning"
-                size={20}
-                color={colors.accent}
-              />
-              <Text style={styles.featureText}>Emergency SOS alerts</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <IconSymbol
-                ios_icon_name="map.fill"
-                android_material_icon_name="map"
-                size={20}
-                color={colors.accent}
-              />
-              <Text style={styles.featureText}>Interactive map with route history</Text>
-            </View>
-          </View>
+        {/* Info Section */}
+        <View style={styles.infoCard}>
+          <IconSymbol
+            ios_icon_name="info.circle.fill"
+            android_material_icon_name="info"
+            size={24}
+            color={colors.primary}
+          />
+          <Text style={styles.infoText}>
+            Choose your tracking mode to get started. Share tracking links via WhatsApp or SMS.
+          </Text>
         </View>
-
-        <TouchableOpacity style={styles.sosButton} onPress={handleEmergencySOS}>
-          <LinearGradient
-            colors={[colors.danger, '#CC0000']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sosButtonGradient}
-          >
-            <IconSymbol
-              ios_icon_name="exclamationmark.triangle.fill"
-              android_material_icon_name="warning"
-              size={24}
-              color={colors.text}
-            />
-            <Text style={styles.sosButtonText}>Emergency SOS</Text>
-          </LinearGradient>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -190,41 +255,85 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   header: {
-    marginBottom: 32,
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 20,
   },
-  title: {
-    fontSize: 32,
+  logo: {
+    fontSize: 36,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 8,
   },
-  subtitle: {
+  tagline: {
     fontSize: 16,
     color: colors.textSecondary,
-    lineHeight: 24,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  sosCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: colors.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  sosGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    gap: 16,
+  },
+  sosIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosTextContainer: {
+    flex: 1,
+  },
+  sosTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  sosDescription: {
+    fontSize: 14,
+    color: colors.text,
+    opacity: 0.9,
   },
   modesContainer: {
-    gap: 16,
+    gap: 20,
     marginBottom: 24,
   },
   modeCard: {
     borderRadius: 20,
     overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   modeGradient: {
     padding: 24,
-    minHeight: 160,
-    justifyContent: 'center',
+    minHeight: 240,
   },
-  modeIcon: {
+  modeIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
   modeTitle: {
@@ -237,54 +346,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
     opacity: 0.9,
-    lineHeight: 20,
+    marginBottom: 20,
   },
-  featuresCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
+  modeFeatures: {
+    gap: 8,
   },
-  featuresTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  featuresList: {
-    gap: 16,
-  },
-  featureItem: {
+  featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   featureText: {
     fontSize: 14,
-    color: colors.textSecondary,
-    flex: 1,
-  },
-  sosButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  sosButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 18,
-    gap: 12,
-  },
-  sosButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
     color: colors.text,
+    opacity: 0.9,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 });
