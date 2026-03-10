@@ -21,7 +21,7 @@ import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { supabase } from '@/app/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { Map } from '@/components/Map';
 import {
   startForegroundLocationTracking,
