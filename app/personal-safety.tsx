@@ -11,6 +11,8 @@ import {
   Share,
   Linking,
   Alert,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ import * as Battery from 'expo-battery';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/integrations/supabase/client';
+import { Map } from '@/components/Map';
 import Constants from 'expo-constants';
 import {
   startForegroundLocationTracking,
@@ -35,6 +38,12 @@ interface Favorite {
   address: string;
   latitude: number;
   longitude: number;
+}
+
+interface DestinationLocation {
+  latitude: number;
+  longitude: number;
+  address: string;
 }
 
 // Helper function to get the tracking URL based on environment
@@ -67,12 +76,21 @@ export default function PersonalSafetyScreen() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  
+  // Destination selection states
+  const [destination, setDestination] = useState<DestinationLocation | null>(null);
+  const [showDestinationPicker, setShowDestinationPicker] = useState(false);
+  const [tempDestinationAddress, setTempDestinationAddress] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   console.log('PersonalSafetyScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
   useEffect(() => {
     console.log('PersonalSafetyScreen: Component mounted, initializing...');
     checkAuth();
+    getCurrentLocation();
     const getBatteryLevel = async () => {
       try {
         const level = await Battery.getBatteryLevelAsync();
@@ -87,6 +105,28 @@ export default function PersonalSafetyScreen() {
     fetchFavorites();
     checkExistingTracking();
   }, []);
+
+  const getCurrentLocation = async () => {
+    try {
+      console.log('PersonalSafetyScreen: Requesting location permission...');
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        console.log('PersonalSafetyScreen: Location permission granted, getting position...');
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setCurrentLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        console.log('PersonalSafetyScreen: Current location set:', location.coords.latitude, location.coords.longitude);
+      } else {
+        console.log('PersonalSafetyScreen: Location permission denied');
+      }
+    } catch (error) {
+      console.error('PersonalSafetyScreen: Error getting current location:', error);
+    }
+  };
 
   const checkAuth = async () => {
     try {
@@ -123,11 +163,18 @@ export default function PersonalSafetyScreen() {
         if (error) {
           console.error('PersonalSafetyScreen: Error verifying session:', error);
           await clearActiveTrackingSession();
-        } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
+        } else if (data && data.status === 'active') {
           console.log('PersonalSafetyScreen: Restoring active session from database');
           setSessionId(data.id);
           setTrackingCode(data.tracking_code);
           setExpiresAt(data.expiry_time || null);
+          if (data.destination_latitude && data.destination_longitude) {
+            setDestination({
+              latitude: data.destination_latitude,
+              longitude: data.destination_longitude,
+              address: data.destination_address || '',
+            });
+          }
           setIsTracking(true);
         } else {
           console.log('PersonalSafetyScreen: Session is no longer active, clearing');
@@ -220,6 +267,85 @@ export default function PersonalSafetyScreen() {
     return code;
   };
 
+  const handleSearchLocation = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Error', 'Please enter a location to search');
+      return;
+    }
+
+    console.log('PersonalSafetyScreen: User searching for location:', searchQuery);
+    setSearchLoading(true);
+
+    try {
+      const results = await Location.geocodeAsync(searchQuery);
+      
+      if (results && results.length > 0) {
+        const result = results[0];
+        console.log('PersonalSafetyScreen: Search result found:', result);
+        
+        setDestination({
+          latitude: result.latitude,
+          longitude: result.longitude,
+          address: searchQuery,
+        });
+        setTempDestinationAddress(searchQuery);
+        Alert.alert('Success', 'Location found! You can adjust the pin on the map if needed.');
+      } else {
+        console.log('PersonalSafetyScreen: No search results found');
+        Alert.alert('Not Found', 'Location not found. Please try a different search term.');
+      }
+    } catch (error) {
+      console.error('PersonalSafetyScreen: Error searching location:', error);
+      Alert.alert('Error', 'Failed to search location. Please try again.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleMapPress = (latitude: number, longitude: number) => {
+    console.log('PersonalSafetyScreen: User selected location on map:', { latitude, longitude });
+    setDestination({
+      latitude,
+      longitude,
+      address: tempDestinationAddress || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    });
+  };
+
+  const confirmDestination = () => {
+    if (!destination) {
+      Alert.alert('Error', 'Please select a destination on the map or search for a location');
+      return;
+    }
+    console.log('PersonalSafetyScreen: Destination confirmed:', destination);
+    setShowDestinationPicker(false);
+  };
+
+  const handleNavigateToDestination = () => {
+    if (!destination) {
+      Alert.alert('Error', 'No destination selected');
+      return;
+    }
+
+    console.log('PersonalSafetyScreen: Opening Google Maps for navigation to destination');
+
+    const googleMapsUrl = Platform.select({
+      ios: `comgooglemaps://?daddr=${destination.latitude},${destination.longitude}&directionsmode=driving`,
+      android: `google.navigation:q=${destination.latitude},${destination.longitude}&mode=d`,
+    });
+
+    const fallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}`;
+
+    Linking.canOpenURL(googleMapsUrl || fallbackUrl).then((supported) => {
+      if (supported && googleMapsUrl) {
+        Linking.openURL(googleMapsUrl);
+      } else {
+        Linking.openURL(fallbackUrl);
+      }
+    }).catch(() => {
+      Linking.openURL(fallbackUrl);
+    });
+  };
+
   const startTracking = async () => {
     console.log('PersonalSafetyScreen: User tapped Start Safe Tracking button');
     setLoading(true);
@@ -236,6 +362,7 @@ export default function PersonalSafetyScreen() {
 
       console.log('PersonalSafetyScreen: Creating personal safety session in Supabase...');
       console.log('PersonalSafetyScreen: Expiry time:', expiryTime.toISOString());
+      console.log('PersonalSafetyScreen: Destination:', destination ? 'Set' : 'Not set');
 
       // Build the insert object conditionally
       const insertData: any = {
@@ -251,6 +378,14 @@ export default function PersonalSafetyScreen() {
         console.log('PersonalSafetyScreen: Adding user_id to session:', userId);
       } else {
         console.log('PersonalSafetyScreen: Creating anonymous session (no user_id)');
+      }
+
+      // Add destination if set
+      if (destination) {
+        insertData.destination_latitude = destination.latitude;
+        insertData.destination_longitude = destination.longitude;
+        insertData.destination_address = destination.address;
+        console.log('PersonalSafetyScreen: Adding destination to session');
       }
 
       const { data: session, error: sessionError } = await supabase
@@ -376,6 +511,7 @@ export default function PersonalSafetyScreen() {
     setTrackingCode(null);
     setExpiresAt(null);
     setTimeRemaining(null);
+    setDestination(null);
     console.log('PersonalSafetyScreen: Tracking stopped, state reset');
   };
 
@@ -403,15 +539,6 @@ export default function PersonalSafetyScreen() {
           speed: location.coords.speed ? location.coords.speed * 3.6 : null,
           battery_level: batteryLevel,
         });
-
-      console.log('PersonalSafetyScreen: Updating session status to SOS...');
-      await supabase
-        .from('tracking_sessions')
-        .update({
-          status: 'sos_triggered',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', sessionId);
 
       console.log('PersonalSafetyScreen: SOS triggered successfully');
       Alert.alert('Emergency SOS', 'Emergency SOS sent! Your emergency contacts have been notified.');
@@ -525,6 +652,33 @@ export default function PersonalSafetyScreen() {
               <Text style={styles.cardDescription}>
                 {t('safe_tracking_desc')}
               </Text>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Destination (Optional)</Text>
+                <TouchableOpacity
+                  style={styles.destinationButton}
+                  onPress={() => {
+                    console.log('PersonalSafetyScreen: User tapped destination picker button');
+                    setShowDestinationPicker(true);
+                  }}
+                >
+                  <IconSymbol
+                    ios_icon_name="location.fill"
+                    android_material_icon_name="location-on"
+                    size={20}
+                    color={destination ? colors.accent : colors.textSecondary}
+                  />
+                  <Text style={[styles.destinationButtonText, destination && { color: colors.text }]}>
+                    {destination ? destination.address : 'Select destination (optional)'}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
 
               <View style={styles.expiryOptions}>
                 <TouchableOpacity
@@ -702,6 +856,12 @@ export default function PersonalSafetyScreen() {
               <View style={styles.trackingCodeCard}>
                 <Text style={styles.trackingCodeLabel}>{t('tracking_code')}</Text>
                 <Text style={styles.trackingCode}>{trackingCode}</Text>
+                {destination && (
+                  <>
+                    <Text style={styles.destinationLabel}>Destination</Text>
+                    <Text style={styles.destinationText}>{destination.address}</Text>
+                  </>
+                )}
               </View>
 
               <View style={styles.statsRow}>
@@ -731,6 +891,18 @@ export default function PersonalSafetyScreen() {
                   <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
+
+              {destination && (
+                <TouchableOpacity style={styles.navigateButton} onPress={handleNavigateToDestination}>
+                  <IconSymbol
+                    ios_icon_name="arrow.triangle.turn.up.right.circle.fill"
+                    android_material_icon_name="navigation"
+                    size={24}
+                    color={colors.background}
+                  />
+                  <Text style={styles.navigateButtonText}>Navigate to Destination</Text>
+                </TouchableOpacity>
+              )}
 
               <View style={styles.shareButtons}>
                 <TouchableOpacity style={styles.shareButton} onPress={shareTrackingLink}>
@@ -777,6 +949,115 @@ export default function PersonalSafetyScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Destination Picker Modal */}
+      <Modal
+        visible={showDestinationPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          console.log('PersonalSafetyScreen: User closed destination picker modal');
+          setShowDestinationPicker(false);
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowDestinationPicker(false)}>
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select Destination</Text>
+            <TouchableOpacity onPress={confirmDestination}>
+              <Text style={styles.confirmText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <IconSymbol
+                ios_icon_name="magnifyingglass"
+                android_material_icon_name="search"
+                size={20}
+                color={colors.textSecondary}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search for a location..."
+                placeholderTextColor={colors.textTertiary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearchLocation}
+                returnKeyType="search"
+              />
+              {searchLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <TouchableOpacity onPress={handleSearchLocation}>
+                  <IconSymbol
+                    ios_icon_name="arrow.right.circle.fill"
+                    android_material_icon_name="arrow-forward"
+                    size={24}
+                    color={colors.accent}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.searchHint}>Tap on the map to select a location</Text>
+          </View>
+
+          <View style={styles.mapPickerContainer}>
+            {currentLocation && (
+              <Map
+                markers={destination ? [
+                  {
+                    id: 'destination',
+                    latitude: destination.latitude,
+                    longitude: destination.longitude,
+                    title: 'Destination',
+                  },
+                ] : []}
+                initialRegion={{
+                  latitude: destination?.latitude || currentLocation.latitude,
+                  longitude: destination?.longitude || currentLocation.longitude,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }}
+                style={styles.mapPicker}
+                onMapPress={handleMapPress}
+              />
+            )}
+            {destination && (
+              <View style={styles.selectedLocationBadge}>
+                <IconSymbol
+                  ios_icon_name="mappin.circle.fill"
+                  android_material_icon_name="place"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.selectedLocationText}>
+                  {destination.address}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.addressInputContainer}>
+            <Text style={styles.addressInputLabel}>Destination Address</Text>
+            <TextInput
+              style={styles.addressInput}
+              placeholder="Enter or edit address"
+              placeholderTextColor={colors.textTertiary}
+              value={tempDestinationAddress}
+              onChangeText={setTempDestinationAddress}
+              multiline
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -805,6 +1086,30 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 24,
     lineHeight: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  destinationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
+  destinationButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   expiryOptions: {
     flexDirection: 'row',
@@ -996,6 +1301,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.accent,
     letterSpacing: 4,
+    marginBottom: 12,
+  },
+  destinationLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  destinationText: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: 'center',
   },
   statsRow: {
     flexDirection: 'row',
@@ -1018,6 +1335,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 8,
+    marginBottom: 16,
+  },
+  navigateButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   shareButtons: {
     flexDirection: 'row',
@@ -1083,5 +1415,106 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  confirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  searchContainer: {
+    padding: 20,
+    paddingBottom: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
+  searchHint: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  mapPickerContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  mapPicker: {
+    flex: 1,
+  },
+  selectedLocationBadge: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  selectedLocationText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  addressInputContainer: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  addressInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  addressInput: {
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
 });

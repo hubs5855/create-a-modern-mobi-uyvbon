@@ -23,6 +23,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/integrations/supabase/client';
 import { Map } from '@/components/Map';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   startForegroundLocationTracking,
   stopForegroundLocationTracking,
@@ -61,6 +62,10 @@ export default function DeliveryModeScreen() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  
+  // Time picker states
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [deliveryTime, setDeliveryTime] = useState<Date | null>(null);
 
   console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
@@ -106,7 +111,7 @@ export default function DeliveryModeScreen() {
         if (error) {
           console.error('DeliveryModeScreen: Error verifying session:', error);
           await clearActiveTrackingSession();
-        } else if (data && (data.status === 'active' || data.status === 'sos_triggered')) {
+        } else if (data && data.status === 'active') {
           console.log('DeliveryModeScreen: Restoring active session from database');
           setSessionId(data.id);
           setOrderId(data.order_id || null);
@@ -306,6 +311,14 @@ export default function DeliveryModeScreen() {
     handleNavigateToDestination();
   };
 
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    console.log('DeliveryModeScreen: Time picker changed:', selectedDate);
+    setShowTimePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setDeliveryTime(selectedDate);
+    }
+  };
+
   const startDelivery = async () => {
     console.log('DeliveryModeScreen: User tapped Start Delivery button');
     
@@ -354,6 +367,7 @@ export default function DeliveryModeScreen() {
       console.log('DeliveryModeScreen: Customer Name:', customerName || 'None');
       console.log('DeliveryModeScreen: Destination:', destination);
       console.log('DeliveryModeScreen: Expiry time:', expiryTime.toISOString());
+      console.log('DeliveryModeScreen: Delivery time:', deliveryTime ? deliveryTime.toISOString() : 'Not set');
 
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
@@ -473,62 +487,89 @@ export default function DeliveryModeScreen() {
   };
 
   const updateDeliveryStatus = async (newStatus: DeliveryStatus) => {
-    if (!sessionId || !userId) return;
+    if (!sessionId || !userId) {
+      console.log('DeliveryModeScreen: Cannot update status - missing sessionId or userId');
+      return;
+    }
 
-    console.log('DeliveryModeScreen: User updated delivery status to:', newStatus);
-    setDeliveryStatus(newStatus);
+    console.log('DeliveryModeScreen: User tapped status button:', newStatus);
+    console.log('DeliveryModeScreen: Current sessionId:', sessionId);
+    console.log('DeliveryModeScreen: Current userId:', userId);
 
     try {
-      // Update tracking session
-      const { error } = await supabase
+      // First, verify the session belongs to this user
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('tracking_sessions')
+        .select('user_id, status')
+        .eq('id', sessionId)
+        .single();
+
+      if (verifyError) {
+        console.error('DeliveryModeScreen: Error verifying session ownership:', verifyError);
+        Alert.alert('Error', 'Failed to verify session: ' + verifyError.message);
+        return;
+      }
+
+      if (verifyData.user_id !== userId) {
+        console.error('DeliveryModeScreen: Session does not belong to current user');
+        Alert.alert('Error', 'You do not have permission to update this delivery');
+        return;
+      }
+
+      console.log('DeliveryModeScreen: Session verified, updating status...');
+
+      // Update tracking session delivery_status
+      const { data: sessionData, error: sessionError } = await supabase
         .from('tracking_sessions')
         .update({
           delivery_status: newStatus,
+          status: newStatus === 'delivered' ? 'stopped' : 'active',
           updated_at: new Date().toISOString(),
         })
         .eq('id', sessionId)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .select();
 
-      if (error) {
-        console.error('DeliveryModeScreen: Error updating delivery status in tracking_sessions:', error);
-      } else {
-        console.log('DeliveryModeScreen: Delivery status updated successfully in tracking_sessions');
+      if (sessionError) {
+        console.error('DeliveryModeScreen: Error updating delivery status in tracking_sessions:', sessionError);
+        Alert.alert('Error', 'Failed to update status: ' + sessionError.message);
+        return;
       }
+
+      console.log('DeliveryModeScreen: Tracking session updated successfully:', sessionData);
 
       // Update order record
       console.log('DeliveryModeScreen: Updating order delivery status...');
-      const { error: orderError } = await supabase
+      const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .update({
           delivery_status: newStatus,
           updated_at: new Date().toISOString(),
         })
         .eq('tracking_session_id', sessionId)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .select();
 
       if (orderError) {
         console.error('DeliveryModeScreen: Error updating delivery status in orders:', orderError);
       } else {
-        console.log('DeliveryModeScreen: Delivery status updated successfully in orders');
+        console.log('DeliveryModeScreen: Order status updated successfully:', orderData);
       }
+
+      // Update local state
+      setDeliveryStatus(newStatus);
 
       if (newStatus === 'delivered') {
         console.log('DeliveryModeScreen: Delivery marked as delivered, stopping location updates...');
         await stopForegroundLocationTracking();
-
-        await supabase
-          .from('tracking_sessions')
-          .update({
-            status: 'completed',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', sessionId)
-          .eq('user_id', userId);
-
         console.log('DeliveryModeScreen: Delivery completed, tracking stopped');
+        Alert.alert('Success', 'Delivery marked as delivered! Tracking has been stopped.');
+      } else {
+        Alert.alert('Success', `Status updated to: ${newStatus === 'on_the_way' ? 'On the Way' : 'Pending'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('DeliveryModeScreen: Exception updating delivery status:', error);
+      Alert.alert('Error', 'Failed to update status: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -577,6 +618,7 @@ export default function DeliveryModeScreen() {
     setShowTrafficAlert(false);
     setExpiresAt(null);
     setTimeRemaining(null);
+    setDeliveryTime(null);
     console.log('DeliveryModeScreen: Delivery tracking stopped, state reset');
   };
 
@@ -672,9 +714,22 @@ export default function DeliveryModeScreen() {
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   };
 
+  const formatDeliveryTime = (date: Date | null): string => {
+    if (!date) return 'Not set';
+    
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes.toString().padStart(2, '0');
+    
+    return `${displayHours}:${displayMinutes} ${ampm}`;
+  };
+
   const statusText = getStatusText(deliveryStatus);
   const statusColor = getStatusColor(deliveryStatus);
   const timeRemainingText = formatCountdown(timeRemaining);
+  const deliveryTimeText = formatDeliveryTime(deliveryTime);
 
   console.log('DeliveryModeScreen: Rendering UI, destination:', destination ? 'Set' : 'Not set');
 
@@ -752,6 +807,43 @@ export default function DeliveryModeScreen() {
                   />
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Expected Delivery Time (Optional)</Text>
+                <TouchableOpacity
+                  style={styles.destinationButton}
+                  onPress={() => {
+                    console.log('DeliveryModeScreen: User tapped time picker button');
+                    setShowTimePicker(true);
+                  }}
+                >
+                  <IconSymbol
+                    ios_icon_name="clock.fill"
+                    android_material_icon_name="schedule"
+                    size={20}
+                    color={deliveryTime ? colors.accent : colors.textSecondary}
+                  />
+                  <Text style={[styles.destinationButtonText, deliveryTime && { color: colors.text }]}>
+                    {deliveryTimeText}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={deliveryTime || new Date()}
+                  mode="time"
+                  is24Hour={false}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleTimeChange}
+                />
+              )}
 
               <TouchableOpacity
                 style={[styles.startButton, (!destination || !userId) && styles.startButtonDisabled]}
@@ -861,6 +953,12 @@ export default function DeliveryModeScreen() {
                     <Text style={styles.orderInfoValue}>{destination.address}</Text>
                   </View>
                 ) : null}
+                {deliveryTime && (
+                  <View style={styles.orderInfoRow}>
+                    <Text style={styles.orderInfoLabel}>Expected Time</Text>
+                    <Text style={styles.orderInfoValue}>{deliveryTimeText}</Text>
+                  </View>
+                )}
                 {expiresAt && (
                   <View style={styles.orderInfoRow}>
                     <Text style={styles.orderInfoLabel}>Time Remaining</Text>
