@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-ouc.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/app-icon-ouc.png",
       "resizeMode": "contain",
@@ -42,7 +42,11 @@
         "WAKE_LOCK",
         "INTERNET",
         "ACCESS_NETWORK_STATE"
-      ]
+      ],
+      "buildToolsVersion": "34.0.0",
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "minSdkVersion": 24
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -69,6 +73,9 @@
         "origin": false
       },
       "backendUrl": "https://ejc7w5dc44x2t7vwbcmdvj8hnuge43dg.app.specular.dev"
+    },
+    "hooks": {
+      "postPublish": []
     }
   }
 }
