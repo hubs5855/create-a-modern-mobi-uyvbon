@@ -23,7 +23,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/integrations/supabase/client';
 import { Map } from '@/components/Map';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   startForegroundLocationTracking,
   stopForegroundLocationTracking,
@@ -38,6 +37,11 @@ interface DestinationLocation {
   latitude: number;
   longitude: number;
   address: string;
+}
+
+interface EmergencyContact {
+  name: string;
+  phone: string;
 }
 
 export default function DeliveryModeScreen() {
@@ -63,9 +67,14 @@ export default function DeliveryModeScreen() {
   const [userId, setUserId] = useState<string | null>(null);
   const countdownInterval = useRef<NodeJS.Timeout | null>(null);
   
-  // Time picker states
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [deliveryTime, setDeliveryTime] = useState<Date | null>(null);
+  // Time selection states (1h, 3h, 6h)
+  const [expiryHours, setExpiryHours] = useState(3);
+  
+  // Emergency contact states
+  const [showEmergencyContactModal, setShowEmergencyContactModal] = useState(false);
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
 
   console.log('DeliveryModeScreen: Rendering, isTracking:', isTracking, 'sessionId:', sessionId);
 
@@ -74,6 +83,7 @@ export default function DeliveryModeScreen() {
     checkAuth();
     getCurrentLocation();
     checkExistingTracking();
+    loadEmergencyContacts();
   }, []);
 
   const checkAuth = async () => {
@@ -90,6 +100,193 @@ export default function DeliveryModeScreen() {
     } catch (error) {
       console.error('DeliveryModeScreen: Error checking auth:', error);
       setUserId(null);
+    }
+  };
+
+  const loadEmergencyContacts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('DeliveryModeScreen: No user, cannot load emergency contacts');
+        return;
+      }
+
+      console.log('DeliveryModeScreen: Loading emergency contacts from Supabase...');
+      const { data, error } = await supabase
+        .from('emergency_contacts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('DeliveryModeScreen: Error loading emergency contacts:', error);
+      } else {
+        console.log('DeliveryModeScreen: Emergency contacts loaded:', data?.length || 0);
+        setEmergencyContacts(data || []);
+      }
+    } catch (error) {
+      console.error('DeliveryModeScreen: Exception loading emergency contacts:', error);
+    }
+  };
+
+  const handleAddEmergencyContact = async () => {
+    if (!newContactName.trim() || !newContactPhone.trim()) {
+      Alert.alert('Error', 'Please enter both name and phone number');
+      return;
+    }
+
+    if (!userId) {
+      Alert.alert('Error', 'Please log in to add emergency contacts');
+      return;
+    }
+
+    console.log('DeliveryModeScreen: Adding emergency contact:', newContactName, newContactPhone);
+
+    try {
+      const { data, error } = await supabase
+        .from('emergency_contacts')
+        .insert({
+          user_id: userId,
+          name: newContactName.trim(),
+          phone: newContactPhone.trim(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('DeliveryModeScreen: Error adding emergency contact:', error);
+        Alert.alert('Error', 'Failed to add emergency contact: ' + error.message);
+      } else {
+        console.log('DeliveryModeScreen: Emergency contact added successfully');
+        setEmergencyContacts([data, ...emergencyContacts]);
+        setNewContactName('');
+        setNewContactPhone('');
+        Alert.alert('Success', 'Emergency contact added successfully');
+      }
+    } catch (error: any) {
+      console.error('DeliveryModeScreen: Exception adding emergency contact:', error);
+      Alert.alert('Error', 'Failed to add emergency contact: ' + (error.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeleteEmergencyContact = async (contactId: string, contactName: string) => {
+    if (!userId) return;
+
+    console.log('DeliveryModeScreen: User requested to delete emergency contact:', contactName);
+
+    Alert.alert(
+      'Delete Contact',
+      `Are you sure you want to delete ${contactName}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('emergency_contacts')
+                .delete()
+                .eq('id', contactId)
+                .eq('user_id', userId);
+
+              if (error) {
+                console.error('DeliveryModeScreen: Error deleting emergency contact:', error);
+                Alert.alert('Error', 'Failed to delete contact');
+              } else {
+                console.log('DeliveryModeScreen: Emergency contact deleted successfully');
+                setEmergencyContacts(emergencyContacts.filter(c => c.id !== contactId));
+                Alert.alert('Success', 'Contact deleted successfully');
+              }
+            } catch (error) {
+              console.error('DeliveryModeScreen: Exception deleting emergency contact:', error);
+              Alert.alert('Error', 'Failed to delete contact');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSendSOS = async () => {
+    console.log('DeliveryModeScreen: User tapped Send SOS button');
+
+    if (emergencyContacts.length === 0) {
+      Alert.alert('No Emergency Contacts', 'Please add emergency contacts first');
+      return;
+    }
+
+    try {
+      console.log('DeliveryModeScreen: Getting current location for SOS...');
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${location.coords.latitude},${location.coords.longitude}`;
+      const message = `🚨 EMERGENCY SOS 🚨\n\nI need help! My current location:\n${mapsLink}\n\nOrder ID: ${orderId || 'N/A'}\nTracking Code: ${trackingCode || 'N/A'}`;
+
+      console.log('DeliveryModeScreen: SOS message prepared:', message);
+
+      Alert.alert(
+        'Send Emergency SOS',
+        `This will send your location to ${emergencyContacts.length} emergency contact(s):\n\n${emergencyContacts.map(c => c.name).join(', ')}\n\nLocation: ${mapsLink}`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Send SOS',
+            style: 'destructive',
+            onPress: async () => {
+              console.log('DeliveryModeScreen: User confirmed SOS send');
+              
+              // Send SMS to each emergency contact
+              for (const contact of emergencyContacts) {
+                const smsUrl = Platform.select({
+                  ios: `sms:${contact.phone}&body=${encodeURIComponent(message)}`,
+                  android: `sms:${contact.phone}?body=${encodeURIComponent(message)}`,
+                });
+
+                if (smsUrl) {
+                  try {
+                    await Linking.openURL(smsUrl);
+                    console.log('DeliveryModeScreen: SMS app opened for contact:', contact.name);
+                  } catch (error) {
+                    console.error('DeliveryModeScreen: Error opening SMS app:', error);
+                  }
+                }
+              }
+
+              // Log SOS event in database
+              if (sessionId) {
+                try {
+                  await supabase
+                    .from('locations')
+                    .insert({
+                      session_id: sessionId,
+                      latitude: location.coords.latitude,
+                      longitude: location.coords.longitude,
+                      speed: location.coords.speed ? location.coords.speed * 3.6 : null,
+                      battery_level: await Battery.getBatteryLevelAsync().then(l => Math.round(l * 100)),
+                    });
+                  console.log('DeliveryModeScreen: SOS location logged to database');
+                } catch (error) {
+                  console.error('DeliveryModeScreen: Error logging SOS location:', error);
+                }
+              }
+
+              Alert.alert('SOS Sent', 'Emergency SOS has been sent to your contacts');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('DeliveryModeScreen: Error sending SOS:', error);
+      Alert.alert('Error', 'Failed to send SOS. Please try again.');
     }
   };
 
@@ -311,14 +508,6 @@ export default function DeliveryModeScreen() {
     handleNavigateToDestination();
   };
 
-  const handleTimeChange = (event: any, selectedDate?: Date) => {
-    console.log('DeliveryModeScreen: Time picker changed:', selectedDate);
-    setShowTimePicker(Platform.OS === 'ios');
-    if (selectedDate) {
-      setDeliveryTime(selectedDate);
-    }
-  };
-
   const startDelivery = async () => {
     console.log('DeliveryModeScreen: User tapped Start Delivery button');
     
@@ -359,15 +548,14 @@ export default function DeliveryModeScreen() {
       const newTrackingCode = generateTrackingCode();
       const newOrderId = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
       
-      // Set expiry time to 8 hours from now for delivery mode
-      const expiryTime = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      // Set expiry time based on selected hours
+      const expiryTime = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
       console.log('DeliveryModeScreen: Creating delivery session in Supabase with user_id:', userId);
       console.log('DeliveryModeScreen: Order ID:', newOrderId);
       console.log('DeliveryModeScreen: Customer Name:', customerName || 'None');
       console.log('DeliveryModeScreen: Destination:', destination);
-      console.log('DeliveryModeScreen: Expiry time:', expiryTime.toISOString());
-      console.log('DeliveryModeScreen: Delivery time:', deliveryTime ? deliveryTime.toISOString() : 'Not set');
+      console.log('DeliveryModeScreen: Expiry time:', expiryTime.toISOString(), `(${expiryHours} hours)`);
 
       const { data: session, error: sessionError } = await supabase
         .from('tracking_sessions')
@@ -618,7 +806,6 @@ export default function DeliveryModeScreen() {
     setShowTrafficAlert(false);
     setExpiresAt(null);
     setTimeRemaining(null);
-    setDeliveryTime(null);
     console.log('DeliveryModeScreen: Delivery tracking stopped, state reset');
   };
 
@@ -714,22 +901,9 @@ export default function DeliveryModeScreen() {
     return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   };
 
-  const formatDeliveryTime = (date: Date | null): string => {
-    if (!date) return 'Not set';
-    
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = minutes.toString().padStart(2, '0');
-    
-    return `${displayHours}:${displayMinutes} ${ampm}`;
-  };
-
   const statusText = getStatusText(deliveryStatus);
   const statusColor = getStatusColor(deliveryStatus);
   const timeRemainingText = formatCountdown(timeRemaining);
-  const deliveryTimeText = formatDeliveryTime(deliveryTime);
 
   console.log('DeliveryModeScreen: Rendering UI, destination:', destination ? 'Set' : 'Not set');
 
@@ -809,41 +983,43 @@ export default function DeliveryModeScreen() {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Expected Delivery Time (Optional)</Text>
-                <TouchableOpacity
-                  style={styles.destinationButton}
-                  onPress={() => {
-                    console.log('DeliveryModeScreen: User tapped time picker button');
-                    setShowTimePicker(true);
-                  }}
-                >
-                  <IconSymbol
-                    ios_icon_name="clock.fill"
-                    android_material_icon_name="schedule"
-                    size={20}
-                    color={deliveryTime ? colors.accent : colors.textSecondary}
-                  />
-                  <Text style={[styles.destinationButtonText, deliveryTime && { color: colors.text }]}>
-                    {deliveryTimeText}
-                  </Text>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron-right"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                <Text style={styles.inputLabel}>Session Duration</Text>
+                <View style={styles.expiryOptions}>
+                  <TouchableOpacity
+                    style={[styles.expiryButton, expiryHours === 1 && styles.expiryButtonActive]}
+                    onPress={() => {
+                      console.log('DeliveryModeScreen: User selected 1 hour duration');
+                      setExpiryHours(1);
+                    }}
+                  >
+                    <Text style={[styles.expiryButtonText, expiryHours === 1 && styles.expiryButtonTextActive]}>
+                      1 Hour
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.expiryButton, expiryHours === 3 && styles.expiryButtonActive]}
+                    onPress={() => {
+                      console.log('DeliveryModeScreen: User selected 3 hours duration');
+                      setExpiryHours(3);
+                    }}
+                  >
+                    <Text style={[styles.expiryButtonText, expiryHours === 3 && styles.expiryButtonTextActive]}>
+                      3 Hours
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.expiryButton, expiryHours === 6 && styles.expiryButtonActive]}
+                    onPress={() => {
+                      console.log('DeliveryModeScreen: User selected 6 hours duration');
+                      setExpiryHours(6);
+                    }}
+                  >
+                    <Text style={[styles.expiryButtonText, expiryHours === 6 && styles.expiryButtonTextActive]}>
+                      6 Hours
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              {showTimePicker && (
-                <DateTimePicker
-                  value={deliveryTime || new Date()}
-                  mode="time"
-                  is24Hour={false}
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleTimeChange}
-                />
-              )}
 
               <TouchableOpacity
                 style={[styles.startButton, (!destination || !userId) && styles.startButtonDisabled]}
@@ -870,6 +1046,63 @@ export default function DeliveryModeScreen() {
                     </>
                   )}
                 </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            {/* Emergency Contacts Card */}
+            <View style={styles.emergencyCard}>
+              <View style={styles.emergencyHeader}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="warning"
+                  size={24}
+                  color={colors.danger}
+                />
+                <Text style={styles.emergencyTitle}>Emergency Contacts</Text>
+              </View>
+              <Text style={styles.emergencyDescription}>
+                Add emergency contacts who will receive your location in case of an SOS
+              </Text>
+              
+              {emergencyContacts.length > 0 && (
+                <View style={styles.contactsList}>
+                  {emergencyContacts.map((contact) => (
+                    <View key={contact.id} style={styles.contactItem}>
+                      <View style={styles.contactInfo}>
+                        <Text style={styles.contactName}>{contact.name}</Text>
+                        <Text style={styles.contactPhone}>{contact.phone}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteEmergencyContact(contact.id, contact.name)}
+                      >
+                        <IconSymbol
+                          ios_icon_name="trash.fill"
+                          android_material_icon_name="delete"
+                          size={20}
+                          color={colors.danger}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.manageContactsButton}
+                onPress={() => {
+                  console.log('DeliveryModeScreen: User tapped Manage Emergency Contacts');
+                  setShowEmergencyContactModal(true);
+                }}
+              >
+                <IconSymbol
+                  ios_icon_name="person.badge.plus"
+                  android_material_icon_name="person-add"
+                  size={20}
+                  color={colors.accent}
+                />
+                <Text style={styles.manageContactsText}>
+                  {emergencyContacts.length === 0 ? 'Add Emergency Contact' : 'Manage Contacts'}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -910,7 +1143,7 @@ export default function DeliveryModeScreen() {
                     size={20}
                     color={colors.accent}
                   />
-                  <Text style={styles.featureText}>Traffic alerts</Text>
+                  <Text style={styles.featureText}>Emergency SOS alerts</Text>
                 </View>
               </View>
             </View>
@@ -953,12 +1186,6 @@ export default function DeliveryModeScreen() {
                     <Text style={styles.orderInfoValue}>{destination.address}</Text>
                   </View>
                 ) : null}
-                {deliveryTime && (
-                  <View style={styles.orderInfoRow}>
-                    <Text style={styles.orderInfoLabel}>Expected Time</Text>
-                    <Text style={styles.orderInfoValue}>{deliveryTimeText}</Text>
-                  </View>
-                )}
                 {expiresAt && (
                   <View style={styles.orderInfoRow}>
                     <Text style={styles.orderInfoLabel}>Time Remaining</Text>
@@ -1069,6 +1296,24 @@ export default function DeliveryModeScreen() {
                   <Text style={styles.currentStatusText}>Current: {statusText}</Text>
                 </View>
               </View>
+
+              {/* Emergency SOS Button */}
+              <TouchableOpacity style={styles.sosButton} onPress={handleSendSOS}>
+                <LinearGradient
+                  colors={[colors.danger, '#CC0000']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sosButtonGradient}
+                >
+                  <IconSymbol
+                    ios_icon_name="exclamationmark.triangle.fill"
+                    android_material_icon_name="warning"
+                    size={24}
+                    color={colors.text}
+                  />
+                  <Text style={styles.sosButtonText}>Send Emergency SOS</Text>
+                </LinearGradient>
+              </TouchableOpacity>
 
               <TouchableOpacity style={styles.shareButton} onPress={shareTrackingLink}>
                 <IconSymbol
@@ -1194,6 +1439,101 @@ export default function DeliveryModeScreen() {
               multiline
             />
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Emergency Contact Modal */}
+      <Modal
+        visible={showEmergencyContactModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          console.log('DeliveryModeScreen: User closed emergency contact modal');
+          setShowEmergencyContactModal(false);
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowEmergencyContactModal(false)}>
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Emergency Contacts</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.addContactSection}>
+              <Text style={styles.sectionTitle}>Add New Contact</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter contact name"
+                  placeholderTextColor={colors.textTertiary}
+                  value={newContactName}
+                  onChangeText={setNewContactName}
+                />
+              </View>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter phone number"
+                  placeholderTextColor={colors.textTertiary}
+                  value={newContactPhone}
+                  onChangeText={setNewContactPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              <TouchableOpacity style={styles.addButton} onPress={handleAddEmergencyContact}>
+                <IconSymbol
+                  ios_icon_name="plus.circle.fill"
+                  android_material_icon_name="add-circle"
+                  size={20}
+                  color={colors.background}
+                />
+                <Text style={styles.addButtonText}>Add Contact</Text>
+              </TouchableOpacity>
+            </View>
+
+            {emergencyContacts.length > 0 && (
+              <View style={styles.contactsListSection}>
+                <Text style={styles.sectionTitle}>Your Emergency Contacts</Text>
+                {emergencyContacts.map((contact) => (
+                  <View key={contact.id} style={styles.contactItemLarge}>
+                    <View style={styles.contactIconContainer}>
+                      <IconSymbol
+                        ios_icon_name="person.circle.fill"
+                        android_material_icon_name="account-circle"
+                        size={40}
+                        color={colors.accent}
+                      />
+                    </View>
+                    <View style={styles.contactInfoLarge}>
+                      <Text style={styles.contactNameLarge}>{contact.name}</Text>
+                      <Text style={styles.contactPhoneLarge}>{contact.phone}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteEmergencyContact(contact.id, contact.name)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash.fill"
+                        android_material_icon_name="delete"
+                        size={24}
+                        color={colors.danger}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -1382,6 +1722,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
+  expiryOptions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  expiryButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: colors.cardSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  expiryButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  expiryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  expiryButtonTextActive: {
+    color: colors.background,
+  },
   startButton: {
     borderRadius: 16,
     overflow: 'hidden',
@@ -1400,6 +1766,72 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: colors.background,
+  },
+  emergencyCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emergencyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  emergencyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  emergencyDescription: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  contactsList: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  contactPhone: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  manageContactsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cardSecondary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  manageContactsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.accent,
   },
   featuresCard: {
     backgroundColor: colors.card,
@@ -1582,6 +2014,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
   },
+  sosButton: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  sosButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 12,
+  },
+  sosButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
   shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1710,6 +2159,71 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     minHeight: 60,
     textAlignVertical: 'top',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  addContactSection: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  contactsListSection: {
+    marginBottom: 20,
+  },
+  contactItemLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  contactIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.cardSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactInfoLarge: {
+    flex: 1,
+  },
+  contactNameLarge: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  contactPhoneLarge: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  deleteButton: {
+    padding: 8,
   },
   shareOptionsContainer: {
     padding: 20,
