@@ -3,6 +3,11 @@ const { FileStore } = require('metro-cache');
 const path = require('path');
 const fs = require('fs');
 
+// Ensure NODE_ENV is set for builds
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
 const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;

@@ -1,6 +1,11 @@
 module.exports = function (api) {
   api.cache(true);
 
+  // Ensure NODE_ENV is set for builds
+  if (!process.env.NODE_ENV) {
+    process.env.NODE_ENV = 'production';
+  }
+
   const EDITABLE_COMPONENTS =
     process.env.EXPO_PUBLIC_ENABLE_EDIT_MODE === "TRUE" &&
     process.env.NODE_ENV === "development"
@@ -41,6 +46,7 @@ module.exports = function (api) {
       ],
       ...EDITABLE_COMPONENTS,
       "@babel/plugin-proposal-export-namespace-from",
+      "react-native-reanimated/plugin",
       "react-native-worklets/plugin", // react-native-worklets/plugin must be listed last!
     ],
   };
