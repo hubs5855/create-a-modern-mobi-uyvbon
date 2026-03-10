@@ -582,7 +582,7 @@ export default function DeliveryModeScreen() {
         return;
       }
 
-      console.log('DeliveryModeScreen: Session created successfully:', session.id);
+      console.log('DeliveryModeScreen: Session created successfully with ID:', session.id);
 
       // Create order record in orders table
       console.log('DeliveryModeScreen: Creating order record in orders table...');
@@ -810,16 +810,23 @@ export default function DeliveryModeScreen() {
   };
 
   const shareTrackingLink = async () => {
-    if (!trackingCode) return;
+    if (!sessionId) {
+      console.log('DeliveryModeScreen: No session ID to share');
+      return;
+    }
     
     console.log('DeliveryModeScreen: User tapped Share button, opening share modal');
     setShowShareModal(true);
   };
 
   const shareViaMethod = async (method: 'general' | 'whatsapp' | 'messenger') => {
-    if (!trackingCode) return;
+    if (!sessionId) {
+      console.log('DeliveryModeScreen: No session ID to share');
+      return;
+    }
     
-    const trackingUrl = `https://trackme.lk/track/${trackingCode}`;
+    // Generate the tracking URL with session ID as URL parameter
+    const trackingUrl = `https://hubs5855.github.io/Trackme/?session=${sessionId}`;
     const orderText = orderId ? `Order ${orderId}` : 'Your delivery';
     const message = `Track ${orderText}: ${trackingUrl}`;
 
@@ -904,6 +911,7 @@ export default function DeliveryModeScreen() {
   const statusText = getStatusText(deliveryStatus);
   const statusColor = getStatusColor(deliveryStatus);
   const timeRemainingText = formatCountdown(timeRemaining);
+  const trackingUrl = sessionId ? `https://hubs5855.github.io/Trackme/?session=${sessionId}` : '';
 
   console.log('DeliveryModeScreen: Rendering UI, destination:', destination ? 'Set' : 'Not set');
 
@@ -1641,7 +1649,7 @@ export default function DeliveryModeScreen() {
               <Text style={styles.trackingCodeLabel}>Tracking Code</Text>
               <Text style={styles.trackingCodeValue}>{trackingCode}</Text>
               <Text style={styles.trackingUrlLabel}>Tracking URL</Text>
-              <Text style={styles.trackingUrlValue}>https://trackme.lk/track/{trackingCode}</Text>
+              <Text style={styles.trackingUrlValue}>{trackingUrl}</Text>
             </View>
           </View>
         </SafeAreaView>
