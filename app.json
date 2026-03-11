@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-ouc.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/app-icon-ouc.png",
       "resizeMode": "contain",
@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trackmelk.app",
+      "newArchEnabled": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
@@ -34,6 +35,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.trackmelk.com",
+      "newArchEnabled": false,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
