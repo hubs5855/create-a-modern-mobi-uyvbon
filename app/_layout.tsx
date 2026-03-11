@@ -1,5 +1,7 @@
 
 import "react-native-reanimated";
+// Initialize Natively console log capture before anything else
+import "@/utils/errorLogger";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -17,7 +19,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { loadLanguage } from "@/utils/i18n";
-// Note: Error logging is auto-initialized via index.ts import
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
