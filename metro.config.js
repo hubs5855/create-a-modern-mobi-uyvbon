@@ -5,12 +5,7 @@ const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
 
-// Enable package exports for better module resolution
 config.resolver.unstable_enablePackageExports = true;
-
-// CRITICAL FIX: Do not set cacheStores at all - let Metro use default in-memory cache
-// Setting cacheStores = [] causes Metro to try loading cache modules which have export issues
-// Removing this line entirely prevents the ERR_PACKAGE_PATH_NOT_EXPORTED error
 
 // Custom server middleware to receive console.log messages from the app
 const LOG_FILE_PATH = path.join(__dirname, '.natively', 'app_console.log');

@@ -7,7 +7,7 @@ if (!process.env.NODE_ENV) {
 // Export function for dynamic configuration
 module.exports = () => ({
   expo: {
-    name: 'Trackmelk',
+    name: 'TrackMe LK',
     slug: 'trackmelk',
     version: '1.0.0',
     sdkVersion: '52.0.0',
@@ -40,7 +40,7 @@ module.exports = () => ({
         foregroundImage: './assets/images/app-icon-ouc.png',
         backgroundColor: '#000000',
       },
-      package: 'com.trackmelk.com',
+      package: 'com.trackmelk.app',
       newArchEnabled: false,
       permissions: [
         'ACCESS_FINE_LOCATION',
