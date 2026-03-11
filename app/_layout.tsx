@@ -116,9 +116,12 @@ export default function RootLayout() {
               <Stack.Screen name="personal-safety" options={{ headerShown: false }} />
               <Stack.Screen name="delivery-mode" options={{ headerShown: false }} />
               <Stack.Screen name="favorites" options={{ headerShown: false }} />
+              <Stack.Screen name="orders" options={{ headerShown: false }} />
+              <Stack.Screen name="external-map" options={{ headerShown: false }} />
               <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
               <Stack.Screen name="terms-of-service" options={{ headerShown: false }} />
               <Stack.Screen name="track/[code]" options={{ headerShown: false }} />
+              <Stack.Screen name="track/external-map-viewer" options={{ headerShown: false }} />
             </Stack>
             <SystemBars style={"auto"} />
             </GestureHandlerRootView>
