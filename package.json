@@ -29,7 +29,7 @@
     "better-auth": "^1.3.34",
     "difflib": "^0.2.4",
     "expo": "~52.0.0",
-    "expo-battery": "~13.0.1",
+    "expo-battery": "~9.0.1",
     "expo-blur": "~13.0.2",
     "expo-constants": "~17.0.3",
     "expo-font": "~12.0.10",
