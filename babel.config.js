@@ -1,54 +1,25 @@
 
 module.exports = function (api) {
   api.cache(true);
-
-  // Ensure NODE_ENV is set for builds
-  if (!process.env.NODE_ENV) {
-    process.env.NODE_ENV = 'production';
-  }
-
-  const EDITABLE_COMPONENTS =
-    process.env.EXPO_PUBLIC_ENABLE_EDIT_MODE === "TRUE" &&
-    process.env.NODE_ENV === "development"
-      ? [
-          ["./babel-plugins/editable-elements.js", {}],
-          ["./babel-plugins/inject-source-location.js", {}],
-        ]
-      : [];
-
   return {
-    presets: ["babel-preset-expo"],
+    presets: ['babel-preset-expo'],
     plugins: [
       [
-        "module-resolver",
+        'module-resolver',
         {
-          root: ["./"],
-          extensions: [
-            ".ios.ts",
-            ".android.ts",
-            ".ts",
-            ".ios.tsx",
-            ".android.tsx",
-            ".tsx",
-            ".jsx",
-            ".js",
-            ".json",
-          ],
+          root: ['./'],
           alias: {
-            "@": "./",
-            "@components": "./components",
-            "@style": "./style",
-            "@hooks": "./hooks",
-            "@types": "./types",
-            "@contexts": "./contexts",
-            "@lib": "./lib",
+            '@': './',
+            '@components': './components',
+            '@style': './style',
+            '@hooks': './hooks',
+            '@types': './types',
+            '@contexts': './contexts',
+            '@lib': './lib',
           },
         },
       ],
-      ...EDITABLE_COMPONENTS,
-      "@babel/plugin-proposal-export-namespace-from",
-      // CRITICAL: react-native-reanimated/plugin MUST be listed last!
-      "react-native-reanimated/plugin",
+      'react-native-reanimated/plugin',
     ],
   };
 };
