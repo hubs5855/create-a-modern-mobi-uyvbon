@@ -31,7 +31,7 @@
         "foregroundImage": "./assets/images/app-icon-ouc.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.trackmelk.app",
+      "package": "com.trackmelk.com",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
