@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,30 @@ export default function ExternalMapViewerScreen() {
 
   console.log('ExternalMapViewerScreen: Initializing with tracking code:', code);
 
-  const fetchMapData = useCallback(async () => {
+  useEffect(() => {
+    fetchMapData();
+  }, [code]);
+
+  useEffect(() => {
+    if (!mapData?.expiresAt) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const calculateTimeRemaining = () => {
+      const expiryTime = new Date(mapData.expiresAt!).getTime();
+      const now = Date.now();
+      const remaining = Math.max(0, expiryTime - now);
+      setTimeRemaining(remaining);
+    };
+
+    calculateTimeRemaining();
+    const interval = setInterval(calculateTimeRemaining, 1000);
+
+    return () => clearInterval(interval);
+  }, [mapData?.expiresAt]);
+
+  const fetchMapData = async () => {
     if (!code) {
       setError('No tracking code provided');
       setLoading(false);
@@ -72,30 +95,7 @@ export default function ExternalMapViewerScreen() {
     } finally {
       setLoading(false);
     }
-  }, [code]);
-
-  useEffect(() => {
-    fetchMapData();
-  }, [fetchMapData]);
-
-  useEffect(() => {
-    if (!mapData?.expiresAt) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    const calculateTimeRemaining = () => {
-      const expiryTime = new Date(mapData.expiresAt!).getTime();
-      const now = Date.now();
-      const remaining = Math.max(0, expiryTime - now);
-      setTimeRemaining(remaining);
-    };
-
-    calculateTimeRemaining();
-    const interval = setInterval(calculateTimeRemaining, 1000);
-
-    return () => clearInterval(interval);
-  }, [mapData?.expiresAt]);
+  };
 
   const handleOpenInBrowser = () => {
     if (mapData?.mapUrl) {

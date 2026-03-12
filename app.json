@@ -3,11 +3,10 @@
     "name": "Trackmelk",
     "slug": "trackmelk",
     "version": "1.0.0",
-    "sdkVersion": "52.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-ouc.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/app-icon-ouc.png",
       "resizeMode": "contain",
@@ -16,7 +15,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.trackmelk.app",
-      "newArchEnabled": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "TrackMe LK needs your location to provide real-time tracking for personal safety and delivery services.",
@@ -34,7 +32,6 @@
         "backgroundColor": "#000000"
       },
       "package": "com.trackmelk.app",
-      "newArchEnabled": false,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -45,7 +42,11 @@
         "WAKE_LOCK",
         "INTERNET",
         "ACCESS_NETWORK_STATE"
-      ]
+      ],
+      "buildToolsVersion": "34.0.0",
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "minSdkVersion": 24
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -72,6 +73,9 @@
         "origin": false
       },
       "backendUrl": "https://ejc7w5dc44x2t7vwbcmdvj8hnuge43dg.app.specular.dev"
+    },
+    "hooks": {
+      "postPublish": []
     }
   }
 }

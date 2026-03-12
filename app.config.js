@@ -7,14 +7,13 @@ if (!process.env.NODE_ENV) {
 // Export function for dynamic configuration
 module.exports = () => ({
   expo: {
-    name: 'TrackMe LK',
+    name: 'Trackmelk',
     slug: 'trackmelk',
     version: '1.0.0',
-    sdkVersion: '52.0.0',
     orientation: 'portrait',
     icon: './assets/images/app-icon-ouc.png',
     userInterfaceStyle: 'automatic',
-    newArchEnabled: false,
+    newArchEnabled: true,
     splash: {
       image: './assets/images/app-icon-ouc.png',
       resizeMode: 'contain',
@@ -23,7 +22,6 @@ module.exports = () => ({
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.trackmelk.app',
-      newArchEnabled: false,
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -41,7 +39,6 @@ module.exports = () => ({
         backgroundColor: '#000000',
       },
       package: 'com.trackmelk.app',
-      newArchEnabled: false,
       permissions: [
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
@@ -53,6 +50,10 @@ module.exports = () => ({
         'INTERNET',
         'ACCESS_NETWORK_STATE',
       ],
+      buildToolsVersion: '34.0.0',
+      compileSdkVersion: 35,
+      targetSdkVersion: 35,
+      minSdkVersion: 24,
     },
     web: {
       favicon: './assets/images/final_quest_240x240.png',

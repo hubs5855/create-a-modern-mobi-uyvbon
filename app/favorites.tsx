@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -45,33 +45,12 @@ export default function FavoritesScreen() {
 
   console.log('FavoritesScreen: Rendering');
 
-  const fetchFavorites = useCallback(async (uid: string) => {
-    console.log('FavoritesScreen: Fetching favorites for user:', uid);
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase
-        .from('favorites')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('FavoritesScreen: Error fetching favorites:', error);
-        Alert.alert('Error', 'Failed to load favorites: ' + error.message);
-      } else {
-        console.log('FavoritesScreen: Favorites fetched:', data?.length || 0);
-        setFavorites(data || []);
-      }
-    } catch (error) {
-      console.error('FavoritesScreen: Exception fetching favorites:', error);
-      Alert.alert('Error', 'Failed to load favorites');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    checkAuthAndFetch();
+    getCurrentLocation();
   }, []);
 
-  const checkAuthAndFetch = useCallback(async () => {
+  const checkAuthAndFetch = async () => {
     console.log('FavoritesScreen: Checking authentication...');
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -104,12 +83,7 @@ export default function FavoritesScreen() {
       console.error('FavoritesScreen: Error checking auth:', error);
       setLoading(false);
     }
-  }, [router, fetchFavorites]);
-
-  useEffect(() => {
-    checkAuthAndFetch();
-    getCurrentLocation();
-  }, [checkAuthAndFetch]);
+  };
 
   const getCurrentLocation = async () => {
     try {
@@ -125,6 +99,32 @@ export default function FavoritesScreen() {
       }
     } catch (error) {
       console.error('Error getting current location:', error);
+    }
+  };
+
+  const fetchFavorites = async (uid: string) => {
+    console.log('FavoritesScreen: Fetching favorites for user:', uid);
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('FavoritesScreen: Error fetching favorites:', error);
+        Alert.alert('Error', 'Failed to load favorites: ' + error.message);
+      } else {
+        console.log('FavoritesScreen: Favorites fetched:', data?.length || 0);
+        setFavorites(data || []);
+      }
+    } catch (error) {
+      console.error('FavoritesScreen: Exception fetching favorites:', error);
+      Alert.alert('Error', 'Failed to load favorites');
+    } finally {
+      setLoading(false);
     }
   };
 
