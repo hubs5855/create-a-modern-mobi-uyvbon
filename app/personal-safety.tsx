@@ -46,22 +46,6 @@ interface DestinationLocation {
   address: string;
 }
 
-// Helper function to get the tracking URL based on environment
-function getTrackingUrl(trackingCode: string): string {
-  // In production, use your custom domain
-  // In development, use the Expo dev server URL
-  if (__DEV__) {
-    // For development, use the current app URL
-    const expoUrl = Constants.expoConfig?.hostUri;
-    if (expoUrl) {
-      return `exp://${expoUrl}/track/${trackingCode}`;
-    }
-  }
-  
-  // Production URL - replace with your actual domain when deployed
-  return `https://trackme.lk/track/${trackingCode}`;
-}
-
 export default function PersonalSafetyScreen() {
   const router = useRouter();
   const [isTracking, setIsTracking] = useState(false);
@@ -549,17 +533,18 @@ export default function PersonalSafetyScreen() {
   };
 
   const shareTrackingLink = async () => {
-    if (!trackingCode) {
-      console.log('PersonalSafetyScreen: No tracking code to share');
+    if (!sessionId) {
+      console.log('PersonalSafetyScreen: No session ID to share');
       return;
     }
     
-    const trackingUrl = getTrackingUrl(trackingCode);
+    // Generate the tracking URL with session ID as URL parameter
+    const trackingUrl = `https://hubs5855.github.io/Trackme/?session=${sessionId}`;
     console.log('PersonalSafetyScreen: User tapped Share button, sharing:', trackingUrl);
 
     try {
       await Share.share({
-        message: `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`,
+        message: `Track my live location:\n\n${trackingUrl}`,
         title: 'Track My Location',
       });
       console.log('PersonalSafetyScreen: Share sheet opened successfully');
@@ -569,13 +554,14 @@ export default function PersonalSafetyScreen() {
   };
 
   const shareViaWhatsApp = () => {
-    if (!trackingCode) {
-      console.log('PersonalSafetyScreen: No tracking code to share via WhatsApp');
+    if (!sessionId) {
+      console.log('PersonalSafetyScreen: No session ID to share via WhatsApp');
       return;
     }
     
-    const trackingUrl = getTrackingUrl(trackingCode);
-    const message = `Track my live location:\n\nTracking Code: ${trackingCode}\n\n${trackingUrl}`;
+    // Generate the tracking URL with session ID as URL parameter
+    const trackingUrl = `https://hubs5855.github.io/Trackme/?session=${sessionId}`;
+    const message = `Track my live location:\n\n${trackingUrl}`;
     const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
     
     console.log('PersonalSafetyScreen: User tapped WhatsApp share button');
@@ -854,8 +840,8 @@ export default function PersonalSafetyScreen() {
               </View>
 
               <View style={styles.trackingCodeCard}>
-                <Text style={styles.trackingCodeLabel}>{t('tracking_code')}</Text>
-                <Text style={styles.trackingCode}>{trackingCode}</Text>
+                <Text style={styles.trackingCodeLabel}>Session ID</Text>
+                <Text style={styles.trackingCode}>{sessionId}</Text>
                 {destination && (
                   <>
                     <Text style={styles.destinationLabel}>Destination</Text>
@@ -1297,10 +1283,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   trackingCode: {
-    fontSize: 32,
+    fontSize: 18,
     fontWeight: 'bold',
     color: colors.accent,
-    letterSpacing: 4,
     marginBottom: 12,
   },
   destinationLabel: {

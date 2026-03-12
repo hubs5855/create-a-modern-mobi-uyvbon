@@ -1,5 +1,7 @@
 
 import "react-native-reanimated";
+// Initialize Natively console log capture before anything else
+import "@/utils/errorLogger";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -17,7 +19,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { loadLanguage } from "@/utils/i18n";
-// Note: Error logging is auto-initialized via index.ts import
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -115,9 +116,12 @@ export default function RootLayout() {
               <Stack.Screen name="personal-safety" options={{ headerShown: false }} />
               <Stack.Screen name="delivery-mode" options={{ headerShown: false }} />
               <Stack.Screen name="favorites" options={{ headerShown: false }} />
+              <Stack.Screen name="orders" options={{ headerShown: false }} />
+              <Stack.Screen name="external-map" options={{ headerShown: false }} />
               <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
               <Stack.Screen name="terms-of-service" options={{ headerShown: false }} />
               <Stack.Screen name="track/[code]" options={{ headerShown: false }} />
+              <Stack.Screen name="track/external-map-viewer" options={{ headerShown: false }} />
             </Stack>
             <SystemBars style={"auto"} />
             </GestureHandlerRootView>
